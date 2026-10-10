@@ -94,9 +94,9 @@ jobs:
         run: |
           xcode-project build-ipa --workspace "$XCODE_WORKSPACE" --scheme "$XCODE_SCHEME"
 
-      - name: Upload to TestFlight
+      - name: Upload to TestFlight (internal testing)
         run: |
-          app-store-connect publish --path build/ios/ipa/*.ipa --testflight
+          app-store-connect publish --path build/ios/ipa/*.ipa
 
       - name: Save ipa and logs
         if: always()
