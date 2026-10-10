@@ -582,8 +582,8 @@ function renderGroups(){
   const list = $('groupsList'); list.replaceChildren();
   if (!groupsReadable) { list.append(el('div','empty','تعذر قراءة المجموعات. تحقق من قواعد Firebase.')); return; }
   const entries = Object.values(groups);
-  if (!entries.length) { list.append(el('div','empty','لا توجد مجموعات BBM')); return; }
-  entries.forEach(g=>{const row=el('div','row'),info=el('span','info'); info.append(el('span','nm',g.name || 'مجموعة BBM'),el('span','sub',(g.members?.length || 0)+' أعضاء'));row.append(info);list.append(row);});
+  if (!entries.length) { list.append(el('div','empty','لا توجد مجموعات')); return; }
+  entries.forEach(g=>{const row=el('div','row'),info=el('span','info'); info.append(el('span','nm',g.name || 'مجموعة'),el('span','sub',(g.members?.length || 0)+' أعضاء'));row.append(info);list.append(row);});
 }
 
 /* ---------- إضافة جهة اتصال ---------- */
