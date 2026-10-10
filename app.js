@@ -80,9 +80,12 @@ function avatar(id, size = ''){
 function statusIcon(id){
   const d = dataOf(id), s = el('span', 'st-icon');
   if (d?.busy) s.classList.add('busy'); else if (!isOnline(id)) s.classList.add('off');
-  s.title = d?.busy ? 'مشغول' : 'متوفر';
+  s.title = statusLabel(d);
   return s;
 }
+// نص الحالة: المخصصة إن وجدت، وإلا متوفر/مشغول
+function statusLabel(d){ return (d?.stText || '').trim() || (d?.busy ? 'مشغول' : 'متوفر'); }
+function statusText(id){ const d = dataOf(id); return d?.busy || isOnline(id) || id === uid ? statusLabel(d) : 'غير متصل'; }
 
 /* ---------- النغمات والاهتزاز ---------- */
 let actx = null;
@@ -445,7 +448,7 @@ function renderHome(){
   buildMenu();
   $('meHeadAvatar').replaceChildren(avatar(uid, 'sm'));
   $('meHeadName').textContent = me.name;
-  $('meHeadMsg').textContent = me.msg || (me.busy ? 'مشغول' : 'متوفر');
+  $('meHeadMsg').textContent = me.msg || statusLabel(me);
   $('meHeadStatus').className = 'st-icon' + (me.busy ? ' busy' : '');
   const contactIds = Object.keys(contacts).filter(id => !gone[id]);
   $('classicChatsCount').textContent = '(' + Object.values(chats).filter(c => c.lastTs && !isBlocked(c.members.find(m => m !== uid)) && !gone[c.members.find(m => m !== uid)]).length + ')';
@@ -502,7 +505,7 @@ function renderContacts(){
       const t = el('button', 'row classic-contact'); t.type = 'button';
       const info = el('span', 'info');
       const tn = el('span', 'nm'); tn.append(statusIcon(id), el('span', '', nameOf(id)));
-      info.append(tn, el('span', 'sub', users[id]?.msg || (users[id]?.busy ? 'مشغول' : isOnline(id) ? 'متوفر' : 'غير متصل')));
+      info.append(tn, el('span', 'sub', users[id]?.msg || statusText(id)));
       t.append(avatar(id, 'xs'), info);
       if (isBlocked(id)) { t.classList.add('blocked'); t.append(el('span', 'tblocked', 'محظور')); }
       else if (users[id]?.busy) t.append(el('span', 'tbusy', '−'));
@@ -572,7 +575,7 @@ function renderCatPanel(key){
     const t = el('button', 'row classic-contact'); t.type = 'button';
     const info = el('span', 'info'), tn = el('span', 'nm');
     tn.append(statusIcon(id), el('span', '', nameOf(id)));
-    info.append(tn, el('span', 'sub', users[id]?.msg || (users[id]?.busy ? 'مشغول' : isOnline(id) ? 'متوفر' : 'غير متصل')));
+    info.append(tn, el('span', 'sub', users[id]?.msg || statusText(id)));
     t.append(avatar(id, 'xs'), info);
     if (isBlocked(id)) { t.classList.add('blocked'); t.append(el('span', 'tblocked', 'محظور')); }
     else if (users[id]?.busy) t.append(el('span', 'tbusy', '−'));
@@ -651,7 +654,7 @@ function renderUpdates(){
     const line = el('span', 'nm'); line.style.whiteSpace = 'normal';
     const t = el('span'); t.append(el('b', '', d.name), ' ' + (CHANGE_TEXT[d.change] || 'حدّث ملفه'));
     if (d.change === 'msg' && d.msg) t.append(': ' + d.msg);
-    if (d.change === 'status') t.append(': ' + (d.busy ? 'مشغول' : 'متوفر'));
+    if (d.change === 'status') t.append(': ' + statusLabel(d));
     if (d.change === 'country') t.append(': ' + flagOf(d.country) + ' ' + countryName(d.country));
     line.append(t);
     info.append(line, el('span', 'sub', ago(d.updatedAt)));
@@ -789,7 +792,7 @@ function renderProfile(){
   $('pfName').textContent = d.name || '';
   $('pfPin').textContent = d.pin || '';
   $('pfMsg').textContent = d.msg || '';
-  $('pfStatus').replaceChildren(statusIcon(id), ' ', d.busy ? 'مشغول' : (isOnline(id) ? 'متوفر' : 'غير متصل'));
+  $('pfStatus').replaceChildren(statusIcon(id), ' ', statusText(id));
   $('pfFlag').textContent = flagOf(d.country) + ' ' + countryName(d.country);
   $('pfTz').textContent = d.tz ? (d.tz.split('/').pop().replace(/_/g, ' ') + ' (' + tzOffset(d.tz) + ')') : '';
   $('pfTime').textContent = d.tz ? fmtTime(Date.now(), d.tz) : '';
@@ -800,7 +803,8 @@ function renderProfile(){
       const sel = $('edCountry'); if (!sel.options.length) COUNTRIES.forEach(([cc, n]) => { const o = el('option', '', (cc ? flagOf(cc) + ' ' : '') + n); o.value = cc; sel.append(o); });
       sel.value = me.country || '';
     }
-    $('setAvail').setAttribute('aria-pressed', !me.busy); $('setBusy').setAttribute('aria-pressed', !!me.busy);
+    $('setAvail').setAttribute('aria-pressed', !me.busy && !me.stText); $('setBusy').setAttribute('aria-pressed', !!me.busy && !me.stText);
+    renderCustomStatuses();
     $('photoDel').hidden = !me.photo;
     renderTonePicker();
     renderAccount();
@@ -827,8 +831,37 @@ $('edSave').addEventListener('click', () => {
   saveMe(f, change, 'تم الحفظ');
 });
 $('edMute').addEventListener('change', () => saveMe({ mute: $('edMute').checked }, null, $('edMute').checked ? 'تم كتم النغمات' : 'النغمات شغالة'));
-$('setAvail').addEventListener('click', () => me.busy && saveMe({ busy: false }, 'status', 'حالتك: متوفر'));
-$('setBusy').addEventListener('click', () => !me.busy && saveMe({ busy: true }, 'status', 'حالتك: مشغول'));
+$('setAvail').addEventListener('click', () => (me.busy || me.stText) && saveMe({ busy: false, stText: '' }, 'status', 'حالتك: متوفر'));
+$('setBusy').addEventListener('click', () => (!me.busy || me.stText) && saveMe({ busy: true, stText: '' }, 'status', 'حالتك: مشغول'));
+
+/* الحالات المخصصة */
+function renderCustomStatuses(){
+  const box = $('customStatusList'); box.replaceChildren();
+  (me.statuses || []).forEach((st, i) => {
+    const row = el('div', 'stitem');
+    const b = el('button', 'btn'); b.type = 'button';
+    const ic = el('span', 'st-icon' + (st.busy ? ' busy' : ''));
+    b.append(ic, ' ', st.t);
+    b.setAttribute('aria-pressed', String(me.stText === st.t && !!me.busy === !!st.busy));
+    b.addEventListener('click', () => saveMe({ busy: !!st.busy, stText: st.t }, 'status', 'حالتك: ' + st.t));
+    const x = el('button', 'btn x', '✕'); x.type = 'button'; x.title = 'حذف';
+    x.addEventListener('click', () => {
+      const list = (me.statuses || []).filter((_, j) => j !== i), f = { statuses: list };
+      if (me.stText === st.t) { f.stText = ''; }
+      saveMe(f, me.stText === st.t ? 'status' : null);
+    });
+    row.append(b, x); box.append(row);
+  });
+}
+$('stAdd').addEventListener('click', () => {
+  const t = $('stNew').value.trim().slice(0, 30), busy = $('stNewType').value === '1';
+  if (!t) return;
+  const list = (me.statuses || []).filter(s => s.t !== t);
+  if (list.length >= 12) { toast('الحد 12 حالة'); return; }
+  list.push({ t, busy });
+  $('stNew').value = '';
+  saveMe({ statuses: list, stText: t, busy }, 'status', 'حالتك: ' + t);
+});
 $('copyPin').addEventListener('click', async () => { try { await navigator.clipboard.writeText(me.pin); toast('تم نسخ رمز PIN'); } catch { toast('رمزك: ' + me.pin); } });
 // تغيير رمز PIN: نحجز الرمز الجديد، نحدّث الملف، ثم نحذف القديم
 async function changePin(pin){
@@ -914,7 +947,7 @@ function renderChatHead(){
   $('chAvatar').replaceChildren(avatar(chatPeer, 'sm'));
   $('chName').textContent = d.name || 'جهة اتصال';
   $('chStatus').className = 'st-icon' + (d.busy ? ' busy' : isOnline(chatPeer) ? '' : ' off');
-  $('chMsg').textContent = d.msg || (d.busy ? 'مشغول' : isOnline(chatPeer) ? 'متوفر' : 'غير متصل');
+  $('chMsg').textContent = d.msg || statusText(chatPeer);
   const b = isBlocked(chatPeer);
   $('composer').hidden = b; $('pingBtn').hidden = b; $('sendBtn').hidden = b; if (b) $('emojiPanel').hidden = true;
   $('blockedBar').hidden = !b;
