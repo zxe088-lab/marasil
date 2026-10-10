@@ -97,28 +97,54 @@ const SOUNDS = {
 };
 /* نغمات خاصة: 1) ملف يختاره الشخص من جواله (محفوظ في جهازه)  2) ملف في مجلد sounds على السيرفر  3) النغمة الافتراضية */
 const TONE_NAMES = { incoming: 'رسالة واردة', ping: 'الوكزة PING', sent: 'إرسال رسالة', contact: 'تحديثات الأصحاب' };
-const toneBuffers = {};
-async function decodeTone(name, arrayBuf){
-  const ctx = audio(); if (!ctx) return;
-  try { toneBuffers[name] = await ctx.decodeAudioData(arrayBuf); } catch { delete toneBuffers[name]; }
-}
+// ملفات النغمات تشتغل بعنصر <audio> لأنه يشتغل حتى والآيفون على الصامت (عكس الأصوات المولّدة)
+const toneEls = {};      // name -> Audio
+const toneOrigin = {};   // 'device' | 'site'
 async function loadTone(name){
-  delete toneBuffers[name];
-  let custom = null; try { custom = localStorage.getItem('marasil-tone-' + name); } catch {}
-  try {
-    if (custom) return decodeTone(name, await (await fetch(custom)).arrayBuffer());
-    for (const ext of ['mp3', 'ogg', 'wav', 'm4a']) {
-      const r = await fetch('sounds/' + name + '.' + ext, { cache: 'force-cache' });
-      if (r.ok && (r.headers.get('content-type') || '').startsWith('audio')) return decodeTone(name, await r.arrayBuffer());
+  delete toneEls[name]; delete toneOrigin[name];
+  let src = null;
+  try { src = localStorage.getItem('marasil-tone-' + name); } catch {}
+  if (src) toneOrigin[name] = 'device';
+  else {
+    for (const ext of ['mp3', 'm4a', 'wav', 'ogg']) {
+      try {
+        const r = await fetch('sounds/' + name + '.' + ext, { method: 'HEAD', cache: 'no-cache' });
+        if (r.ok && (r.headers.get('content-type') || '').startsWith('audio')) { src = 'sounds/' + name + '.' + ext; toneOrigin[name] = 'site'; break; }
+      } catch {}
     }
-  } catch {}
+  }
+  if (src) {
+    const a = new Audio(src); a.preload = 'auto';
+    a.addEventListener('ended', () => { a._want = false; });
+    toneEls[name] = a;
+  }
 }
 Object.keys(TONE_NAMES).forEach(loadTone);
-function playBuffer(buf){
-  const ctx = audio(); if (!ctx) return false;
-  const s = ctx.createBufferSource(); s.buffer = buf; s.connect(ctx.destination); s.start(); return true;
+// الآيفون يسمح بتشغيل الصوت بعد أول لمسة فقط: نفتح العناصر بصمت مع أول لمسة
+document.addEventListener('pointerdown', () => {
+  Object.values(toneEls).forEach(a => {
+    if (a._want) return;
+    a.muted = true;
+    a.play().then(() => { if (!a._want) { a.pause(); try { a.currentTime = 0; } catch {} } a.muted = false; }).catch(() => { a.muted = false; });
+  });
+}, { once: true, capture: true });
+function playFile(name){
+  // الوكزة: إذا ما لها نغمة خاصة تشغّل نغمة الرسالة الواردة (والاهتزاز يجي من nudgeEffect)
+  const a = toneEls[name] || (name === 'ping' ? toneEls.incoming : null); if (!a) return false;
+  a._want = true; a.muted = false;
+  try { a.currentTime = 0; } catch {}
+  const p = a.play();
+  if (p) p.catch(() => { a._want = false; SOUNDS[name]?.(); });
+  return true;
 }
-const play = name => { if (me?.mute) return; if (toneBuffers[name] && playBuffer(toneBuffers[name])) return; SOUNDS[name]?.(); };
+const play = name => { if (me?.mute) return; if (playFile(name)) return; SOUNDS[name]?.(); };
+function toneReady(name){
+  return new Promise(res => {
+    const a = toneEls[name]; if (!a) return res(false);
+    a.oncanplaythrough = () => res(true); a.onerror = () => res(false);
+    a.load(); setTimeout(() => res(true), 3000);
+  });
+}
 
 function renderTonePicker(){
   const box = $('toneList'); if (!box || box.childElementCount) return;
@@ -126,7 +152,8 @@ function renderTonePicker(){
     const row = el('div', 'tonerow');
     const lab = el('span', 'tn-label', label);
     const st = el('span', 'tn-state');
-    const refresh = () => { let c = null; try { c = localStorage.getItem('marasil-tone-' + name); } catch {} st.textContent = c ? 'نغمة من جهازك' : 'افتراضية'; };
+    const refresh = () => { st.textContent = toneOrigin[name] === 'device' ? 'نغمة من جهازك' : toneOrigin[name] === 'site' ? 'نغمة التطبيق' : 'افتراضية'; };
+    loadTone(name).then(refresh);
     const pick = el('button', 'btn sm', 'اختيار'); pick.type = 'button';
     const test = el('button', 'btn sm', '▶'); test.type = 'button'; test.title = 'تجربة';
     const reset = el('button', 'btn sm', 'افتراضي'); reset.type = 'button';
@@ -142,7 +169,7 @@ function renderTonePicker(){
       fr.onload = async () => {
         try { localStorage.setItem('marasil-tone-' + name, fr.result); } catch { toast('ما فيه مساحة كافية لحفظ النغمة'); return; }
         await loadTone(name);
-        if (!toneBuffers[name]) { try { localStorage.removeItem('marasil-tone-' + name); } catch {} toast('ما قدرنا نشغّل هذا الملف، جرّب mp3'); }
+        if (!(await toneReady(name))) { try { localStorage.removeItem('marasil-tone-' + name); } catch {} await loadTone(name); refresh(); toast('ما قدرنا نشغّل هذا الملف، جرّب mp3'); }
         else { refresh(); test.onclick(); toast('تم تغيير نغمة ' + label); }
       };
       fr.readAsDataURL(f);
