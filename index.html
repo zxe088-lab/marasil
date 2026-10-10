@@ -146,6 +146,12 @@
         </div>
         <button type="button" class="btn primary" id="edSave">حفظ</button>
         <button type="button" class="btn" id="copyPin">نسخ رمز PIN</button>
+        <div class="card" id="pinAdminCard" hidden>
+          <div class="lbl">تغيير رمز PIN 👑</div>
+          <div class="hint">أصحابك المضافين يبقون عندك. الرمز القديم يتوقف، وأي أحد جديد يضيفك بالرمز الجديد.</div>
+          <div class="line"><input id="newPinInput" class="pininput" maxlength="8" placeholder="2B4F9A1C" autocomplete="off" autocapitalize="characters"><button type="button" class="btn" id="setPinBtn">حفظ</button></div>
+          <button type="button" class="btn" id="randPinBtn">رمز عشوائي جديد</button>
+        </div>
       </div>
     </div>
     <nav class="actionbar"><button type="button" data-back><svg><use href="#i-back"/></svg><span>رجوع</span></button></nav>

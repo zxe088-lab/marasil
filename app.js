@@ -192,7 +192,11 @@ function start(id){
   fs.doc('users/' + uid).onSnapshot(s => {
     const had = !!me; me = s.exists ? s.data() : null;
     if (!me) { show('s-setup', false); return; }
-    if (!had) { show('s-home', false); listen(); heartbeat(); }
+    if (!had) {
+      show('s-home', false); listen(); heartbeat();
+      // ميزة تغيير الرمز لصاحب التطبيق فقط (مسجّل في مجموعة admins)
+      fs.doc('admins/' + uid).get().then(a => { $('pinAdminCard').hidden = !a.exists; }).catch(() => {});
+    }
     renderHomeSoon(); if (profileId === uid && !$('s-profile').hidden) renderProfile();
   }, err => { $('errText').textContent = 'ما عندك صلاحية. تأكد من نسخ قواعد الأمان (firestore.rules) في Firebase.'; show('s-error'); console.error(err); });
 }
@@ -439,6 +443,27 @@ $('edMute').addEventListener('change', () => saveMe({ mute: $('edMute').checked 
 $('setAvail').addEventListener('click', () => me.busy && saveMe({ busy: false }, 'status', 'حالتك: متوفر'));
 $('setBusy').addEventListener('click', () => !me.busy && saveMe({ busy: true }, 'status', 'حالتك: مشغول'));
 $('copyPin').addEventListener('click', async () => { try { await navigator.clipboard.writeText(me.pin); toast('تم نسخ رمز PIN'); } catch { toast('رمزك: ' + me.pin); } });
+// تغيير رمز PIN: نحجز الرمز الجديد، نحدّث الملف، ثم نحذف القديم
+async function changePin(pin){
+  pin = pin.toUpperCase();
+  if (!/^[0-9A-F]{8}$/.test(pin)) { toast('الرمز لازم يكون 8 خانات: أرقام 0-9 وحروف A-F'); return; }
+  if (pin === me.pin) { toast('هذا رمزك الحالي'); return; }
+  const old = me.pin;
+  try {
+    if ((await fs.doc('pins/' + pin).get()).exists) { toast('هذا الرمز مأخوذ، جرّب غيره'); return; }
+    await fs.doc('pins/' + pin).set({ uid });
+    await fs.doc('users/' + uid).update({ pin });
+    fs.doc('pins/' + old).delete().catch(() => {});
+    $('newPinInput').value = '';
+    toast('رمزك الجديد: ' + pin);
+  } catch (e) { console.error(e); toast('ما قدرنا نغيّر الرمز، جرّب مرة ثانية'); }
+}
+$('setPinBtn').addEventListener('click', () => changePin($('newPinInput').value.trim()));
+$('randPinBtn').addEventListener('click', async () => {
+  for (let i = 0; i < 5; i++) { const p = newPin(); if (!(await fs.doc('pins/' + p).get()).exists) return changePin(p); }
+  toast('جرّب مرة ثانية');
+});
+
 $('photoBtn').addEventListener('click', () => $('photoInput').click());
 $('photoDel').addEventListener('click', () => saveMe({ photo: '' }, 'photo', 'تمت إزالة الصورة'));
 $('photoInput').addEventListener('change', async e => {
