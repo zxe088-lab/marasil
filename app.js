@@ -1,4 +1,4 @@
-/* مراسيل — تطبيق محادثة على طريقة الماسنجر الكلاسيكي، يعمل على Firebase (الخطة المجانية) */
+/* BPM old — تطبيق محادثة على طريقة الماسنجر الكلاسيكي، يعمل على Firebase (الخطة المجانية) */
 'use strict';
 
 const $ = id => document.getElementById(id);
@@ -10,7 +10,15 @@ const COUNTRIES = [
 ];
 const EMOJIS = '😊😄😁😂🤣😅😉😍😘🥰😋😜🤪😎🤩🥳😏😌🤔🤨😐😶🙄😴😢😭😤😡🤬😱😳🥺😇🤗🤭🤫👍👎👌✌️🤝🙏👏💪❤️💔💯🔥⭐🎉🌹☕🚗✈️🏕️⚽'.match(/\p{Extended_Pictographic}️?/gu);
 const DEFAULT_CAT = 'جهات الاتصال';
-const ONLINE_MS = 2 * 60 * 1000;
+const OWNER_UID = '7KzlcizFv8TrIeqRVqi6BjNoCue2';   // صاحب التطبيق: الوحيد اللي يقدر يغيّر رمز PIN
+const APP_NAME = 'BPM old';
+// داخل تطبيق الآيفون (Capacitor): دخول بدون حساب فقط + اهتزاز حقيقي
+const IS_NATIVE = !!window.Capacitor?.isNativePlatform?.();
+const Haptics = IS_NATIVE ? window.Capacitor?.Plugins?.Haptics : null;
+let blocked = {};                 // المستخدمين اللي حظرتهم
+const gone = {};                  // حسابات انحذفت
+const isBlocked = id => !!blocked[id];
+const ONLINE_MS = 6 * 60 * 1000;
 const GROUP_MS = 5 * 60 * 1000;   // رسائل نفس الشخص خلال 5 دقائق تنجمع في بطاقة وحدة
 
 let auth, fs, uid = null, me = null, tab = 'chats';
@@ -145,15 +153,27 @@ function renderTonePicker(){
     row.append(info, btns, inp); box.append(row);
   });
 }
-const buzz = pattern => { try { navigator.vibrate?.(pattern); } catch {} };
+const buzz = pattern => {
+  try {
+    if (Haptics) {
+      const ms = Array.isArray(pattern) ? pattern.filter((_, i) => i % 2 === 0).reduce((a, b) => a + b, 0) : pattern;
+      Haptics.vibrate({ duration: Math.min(ms, 1500) });
+      return;
+    }
+    navigator.vibrate?.(pattern);
+  } catch {}
+};
 function shake(){ const a = $('app'); a.classList.remove('shake'); void a.offsetWidth; a.classList.add('shake'); }
-function nudgeEffect(){ play('ping'); buzz([400, 100, 400, 100, 400, 100, 800]); shake(); setTimeout(shake, 600); }
+function nudgeEffect(){
+  play('ping'); buzz([400, 100, 400, 100, 400, 100, 800]); shake(); setTimeout(shake, 600);
+  try { Haptics?.notification({ type: 'WARNING' }); } catch {}
+}
 
 /* ---------- التنقل ---------- */
-const SCREENS = ['s-loading','s-error','s-setup','s-home','s-add','s-profile','s-chat'];
+const SCREENS = ['s-loading','s-error','s-login','s-setup','s-home','s-add','s-profile','s-chat'];
 function show(id, push = true){
   const cur = SCREENS.find(s => !$(s).hidden);
-  if (push && cur && cur !== id && !['s-loading','s-error','s-setup'].includes(cur)) stack.push(cur);
+  if (push && cur && cur !== id && !['s-loading','s-error','s-login','s-setup'].includes(cur)) stack.push(cur);
   SCREENS.forEach(s => $(s).hidden = s !== id);
   if (id !== 's-chat') closeChat();
   if (id === 's-home') { stack = []; renderHome(); }
@@ -180,12 +200,106 @@ function boot(){
   }
   firebase.initializeApp(cfg);
   auth = firebase.auth(); fs = firebase.firestore();
-  auth.onAuthStateChanged(u => { if (u) start(u.uid); });
-  auth.signInAnonymously().catch(e => {
-    $('errText').textContent = 'ما قدرنا نسجل الدخول. تأكد أنك فعّلت الدخول المجهول (Anonymous) في Firebase.';
-    show('s-error'); console.error(e);
-  });
+  auth.onAuthStateChanged(u => { if (u) start(u.uid); else if (IS_NATIVE) anonSignIn(); else show('s-login', false); });
+  if (!IS_NATIVE) auth.getRedirectResult?.().then(r => { if (r?.operationType === 'link') toast('تم ربط حسابك بقوقل ✅'); }).catch(authError);
 }
+
+/* ---------- تسجيل الدخول بقوقل ---------- */
+function gProvider(){ const p = new firebase.auth.GoogleAuthProvider(); p.setCustomParameters({ prompt: 'select_account' }); return p; }
+const popupIssue = e => ['auth/popup-blocked', 'auth/operation-not-supported-in-this-environment', 'auth/web-storage-unsupported'].includes(e?.code);
+function authError(e){
+  if (!e) return;
+  console.error(e);
+  const c = e.code || '';
+  if (c === 'auth/popup-closed-by-user' || c === 'auth/cancelled-popup-request') return;
+  if (c === 'auth/unauthorized-domain') toast('لازم تضيف zxe088-lab.github.io في Authorized domains داخل Firebase');
+  else if (c === 'auth/operation-not-allowed') toast('لازم تفعّل الدخول بقوقل (Google) داخل Firebase');
+  else if (c === 'auth/network-request-failed') toast('تأكد من اتصال الإنترنت');
+  else toast('ما قدرنا نسجل الدخول، جرّب مرة ثانية');
+}
+async function googleSignIn(){
+  try { await auth.signInWithPopup(gProvider()); }
+  catch (e) { if (popupIssue(e)) return auth.signInWithRedirect(gProvider()).catch(authError); authError(e); }
+}
+async function anonSignIn(){
+  try { await auth.signInAnonymously(); }
+  catch (e) { $('errText').textContent = 'ما قدرنا نسجل الدخول. تأكد أنك فعّلت الدخول المجهول (Anonymous) في Firebase.'; show('s-error'); console.error(e); }
+}
+async function linkGoogle(){
+  const u = auth.currentUser; if (!u) return;
+  try { await u.linkWithPopup(gProvider()); await u.reload(); toast('تم ربط حسابك بقوقل ✅'); renderAccount(); }
+  catch (e) {
+    if (e.code === 'auth/credential-already-in-use' || e.code === 'auth/email-already-in-use') {
+      const ok = await askText('حساب القوقل هذا مربوط بحساب ثاني في ' + APP_NAME + '. اكتب "دخول" إذا تبي تنتقل له (حسابك الحالي بيضيع)');
+      if (ok === 'دخول' && e.credential) { await auth.signInWithCredential(e.credential).catch(authError); location.reload(); }
+      return;
+    }
+    if (popupIssue(e)) return u.linkWithRedirect(gProvider()).catch(authError);
+    authError(e);
+  }
+}
+async function signOutNow(){
+  const u = auth.currentUser;
+  if (u?.isAnonymous) {
+    const ok = await askText('حسابك مو مربوط بقوقل، لو طلعت بيضيع نهائياً. اكتب "خروج" للتأكيد');
+    if (ok !== 'خروج') return;
+  }
+  await auth.signOut(); location.reload();
+}
+function renderAccount(){
+  const u = auth?.currentUser; if (!u) return;
+  if (IS_NATIVE) {
+    $('accState').textContent = 'حسابك محفوظ في هذا الجهاز. إذا حذفت التطبيق بيضيع الحساب.';
+    $('linkGoogleBtn').hidden = true; $('signOutBtn').hidden = true;
+    return;
+  }
+  const g = (u.providerData || []).find(p => p.providerId === 'google.com');
+  $('accState').textContent = g ? 'مربوط بقوقل: ' + (g.email || u.email || '') : 'حسابك مو مربوط. لو مسحت بيانات المتصفح أو غيّرت جوالك بيضيع حسابك.';
+  $('linkGoogleBtn').hidden = !!g;
+}
+
+// حذف الحساب نهائياً (شرط من آبل)
+async function deleteAccount(){
+  const ok = await askText('حذف الحساب نهائي: ملفك ورمز PIN وجهات اتصالك. اكتب "حذف" للتأكيد');
+  if (ok !== 'حذف') return;
+  try {
+    const wipe = async col => { const s = await fs.collection(col).get(); for (const d of s.docs) await fs.doc(col + '/' + d.id).delete(); };
+    await wipe('users/' + uid + '/contacts');
+    await wipe('users/' + uid + '/blocked');
+    if (me?.pin) await fs.doc('pins/' + me.pin).delete().catch(() => {});
+    await fs.doc('users/' + uid).delete();
+    try { await auth.currentUser.delete(); } catch { try { await auth.signOut(); } catch {} }
+    toast('تم حذف حسابك');
+    setTimeout(() => location.reload(), 1200);
+  } catch (e) { console.error(e); toast('ما قدرنا نحذف الحساب، جرّب مرة ثانية'); }
+}
+$('deleteAccBtn').addEventListener('click', deleteAccount);
+
+// الحظر والإبلاغ (شرط من آبل)
+async function setBlocked(id, on){
+  try {
+    const ref = fs.doc('users/' + uid + '/blocked/' + id);
+    if (on) await ref.set({ at: Date.now() }); else await ref.delete();
+    toast(on ? 'تم حظر ' + nameOf(id) + '. ما راح يقدر يراسلك.' : 'تم إلغاء الحظر');
+  } catch (e) { console.error(e); toast('ما قدرنا نحدّث الحظر، جرّب مرة ثانية'); }
+}
+async function reportUser(id){
+  const reason = await askText('ليش تبلّغ عن ' + nameOf(id) + '؟ (اختياري)');
+  if (reason === null) return;
+  let recent = [];
+  try {
+    const s = await fs.collection('chats/' + chatIdWith(id) + '/messages').orderBy('ts', 'desc').limit(30).get();
+    recent = s.docs.map(d => d.data()).filter(m => m.from === id && m.text).slice(0, 10).map(m => m.text.slice(0, 300));
+  } catch {}
+  try {
+    await fs.collection('reports').add({ from: uid, about: id, aboutName: nameOf(id), reason: reason.slice(0, 500), messages: recent, ts: Date.now() });
+    toast('وصل البلاغ، بنراجعه خلال 24 ساعة. تقدر تحظره بعد.');
+  } catch (e) { console.error(e); toast('ما قدرنا نرسل البلاغ، جرّب مرة ثانية'); }
+}
+$('googleLoginBtn').addEventListener('click', googleSignIn);
+$('anonLoginBtn').addEventListener('click', anonSignIn);
+$('linkGoogleBtn').addEventListener('click', linkGoogle);
+$('signOutBtn').addEventListener('click', signOutNow);
 
 function start(id){
   if (uid) return; uid = id;
@@ -195,7 +309,7 @@ function start(id){
     if (!had) {
       show('s-home', false); listen(); heartbeat();
       // ميزة تغيير الرمز لصاحب التطبيق فقط (مسجّل في مجموعة admins)
-      fs.doc('admins/' + uid).get().then(a => { $('pinAdminCard').hidden = !a.exists; }).catch(() => {});
+      $('pinAdminCard').hidden = uid !== OWNER_UID;
     }
     renderHomeSoon(); if (profileId === uid && !$('s-profile').hidden) renderProfile();
   }, err => { $('errText').textContent = 'ما عندك صلاحية. تأكد من نسخ قواعد الأمان (firestore.rules) في Firebase.'; show('s-error'); console.error(err); });
@@ -204,6 +318,7 @@ function start(id){
 $('setupBtn').addEventListener('click', async () => {
   const name = $('setupName').value.trim();
   if (!name) { toast('اكتب اسم العرض'); return; }
+  if (!$('agreeTerms').checked) { toast('لازم توافق على شروط الاستخدام'); return; }
   $('setupBtn').disabled = true;
   try {
     let pin;
@@ -217,7 +332,7 @@ $('setupBtn').addEventListener('click', async () => {
 
 function heartbeat(){
   const beat = () => { if (document.visibilityState === 'visible') fs.doc('users/' + uid).update({ lastSeen: Date.now() }).catch(() => {}); };
-  beat(); setInterval(beat, 60000);
+  beat(); setInterval(beat, 4 * 60 * 1000);
   document.addEventListener('visibilitychange', () => { beat(); markRead(); updateTitle(); });
   setInterval(() => { renderHomeSoon(); if (!$('s-profile').hidden) renderProfile(); if (chatPeer) renderChatHead(); }, 30000);
 }
@@ -226,7 +341,7 @@ function watchUser(id){
   if (userSubs[id]) return;
   userSubs[id] = fs.doc('users/' + id).onSnapshot(s => {
     const prev = users[id];
-    if (s.exists) users[id] = s.data(); else delete users[id];
+    if (s.exists) { users[id] = s.data(); delete gone[id]; } else { delete users[id]; gone[id] = true; }
     if (prev && users[id] && prev.updatedAt !== users[id].updatedAt && contacts[id]) play('contact');
     renderHomeSoon();
     if (profileId === id && !$('s-profile').hidden) renderProfile();
@@ -235,6 +350,12 @@ function watchUser(id){
 }
 
 function listen(){
+  fs.collection('users/' + uid + '/blocked').onSnapshot(s => {
+    blocked = {}; s.docs.forEach(d => blocked[d.id] = true);
+    renderHomeSoon();
+    if (chatPeer) { renderChatHead(); renderMsgs(); }
+    if (profileId && !$('s-profile').hidden) renderProfile();
+  });
   fs.collection('users/' + uid + '/contacts').onSnapshot(s => {
     contacts = {};
     s.docs.forEach(d => { contacts[d.id] = d.data(); watchUser(d.id); });
@@ -244,7 +365,7 @@ function listen(){
     s.docChanges().forEach(c => {
       const d = c.doc.data(), peer = d.members.find(m => m !== uid);
       if (peer) watchUser(peer);
-      if (!firstChatsSnap && c.type !== 'removed' && d.lastFrom && d.lastFrom !== uid && d.lastTs > (chats[c.doc.id]?.lastTs || 0)) {
+      if (!firstChatsSnap && c.type !== 'removed' && d.lastFrom && d.lastFrom !== uid && !isBlocked(d.lastFrom) && d.lastTs > (chats[c.doc.id]?.lastTs || 0)) {
         const viewing = c.doc.id === chatId && document.visibilityState === 'visible';
         if (d.lastKind === 'ping') nudgeEffect();
         else if (!viewing) { play('incoming'); buzz(200); }
@@ -275,7 +396,7 @@ function renderHome(){
 
 function renderChats(){
   const list = $('chatList'); list.replaceChildren();
-  const arr = Object.entries(chats).filter(([, c]) => c.lastTs).sort((a, b) => b[1].lastTs - a[1].lastTs);
+  const arr = Object.entries(chats).filter(([, c]) => { const p = c.members.find(m => m !== uid); return c.lastTs && !isBlocked(p) && !gone[p]; }).sort((a, b) => b[1].lastTs - a[1].lastTs);
   if (!arr.length) { list.append(el('div', 'empty', 'ما فيه دردشات. افتح جهات الاتصال واختر أحداً لبدء الدردشة.')); return; }
   arr.forEach(([, c]) => {
     const peer = c.members.find(m => m !== uid), un = unreadOf(c);
@@ -295,7 +416,7 @@ function renderChats(){
 function renderContacts(){
   const list = $('contactList'); list.replaceChildren();
   const q = $('search').value.trim().toLowerCase();
-  const ids = Object.keys(contacts);
+  const ids = Object.keys(contacts).filter(id => !gone[id]);
   if (!ids.length) { list.append(el('div', 'empty', 'ما عندك جهات اتصال. اضغط "إضافة" تحت واكتب رمز PIN حق صاحبك.')); return; }
   const cats = [...new Set([...(me.cats || [DEFAULT_CAT]), ...ids.map(id => contacts[id].cat || DEFAULT_CAT)])];
   cats.forEach(cat => {
@@ -315,7 +436,8 @@ function renderContacts(){
       const p = photoOf(id);
       if (p) { const img = el('img'); img.src = p; img.alt = ''; t.append(img); } else t.append(initialOf(id));
       const tn = el('span', 'tn'); tn.append(statusIcon(id), el('span', '', nameOf(id))); t.append(tn);
-      if (users[id]?.busy) t.append(el('span', 'tbusy', '−'));
+      if (isBlocked(id)) { t.classList.add('blocked'); t.append(el('span', 'tblocked', 'محظور')); }
+      else if (users[id]?.busy) t.append(el('span', 'tbusy', '−'));
       t.addEventListener('click', () => openProfile(id));
       grid.append(t);
     });
@@ -327,7 +449,7 @@ $('search').addEventListener('input', renderContacts);
 const CHANGE_TEXT = { msg: 'غيّر رسالته الشخصية', name: 'غيّر اسم العرض', photo: 'غيّر صورة العرض', status: 'غيّر حالته', join: 'صار من جهات الاتصال', country: 'غيّر موقعه' };
 function recentUpdates(){
   const week = Date.now() - 7 * 864e5;
-  return Object.keys(contacts).filter(id => users[id]?.updatedAt > week).sort((a, b) => users[b].updatedAt - users[a].updatedAt);
+  return Object.keys(contacts).filter(id => users[id]?.updatedAt > week && !isBlocked(id)).sort((a, b) => users[b].updatedAt - users[a].updatedAt);
 }
 function renderUpdates(){
   const list = $('updatesList'); list.replaceChildren();
@@ -350,8 +472,8 @@ function renderUpdates(){
 }
 
 function updateTitle(){
-  const n = Object.values(chats).filter(unreadOf).length;
-  document.title = (n ? '(' + n + ') ' : '') + 'مراسيل';
+  const n = Object.values(chats).filter(c => unreadOf(c) && !isBlocked(c.lastFrom)).length;
+  document.title = (n ? '(' + n + ') ' : '') + APP_NAME;
   $('led').classList.toggle('on', n > 0);
   $('unreadBadge').hidden = !n; $('unreadBadge').textContent = n;
 }
@@ -366,7 +488,7 @@ $('addContactBtn').addEventListener('click', () => { fillCatSelect($('addCat'));
 $('addForm').addEventListener('submit', async e => {
   e.preventDefault();
   const pin = $('addPin').value.trim().toUpperCase();
-  if (!/^[0-9A-F]{8}$/.test(pin)) { toast('رمز PIN لازم يكون 8 خانات (أرقام وحروف من A إلى F)'); return; }
+  if (!/^[0-9A-Z]{8}$/.test(pin)) { toast('رمز PIN لازم يكون 8 خانات (أرقام وحروف إنجليزية)'); return; }
   if (pin === me.pin) { toast('هذا رمزك أنت'); return; }
   try {
     const p = await fs.doc('pins/' + pin).get();
@@ -423,7 +545,14 @@ function renderProfile(){
     $('setAvail').setAttribute('aria-pressed', !me.busy); $('setBusy').setAttribute('aria-pressed', !!me.busy);
     $('photoDel').hidden = !me.photo;
     renderTonePicker();
-  } else fillCatSelect($('pfCat'), contacts[id]?.cat);
+    renderAccount();
+  } else {
+    fillCatSelect($('pfCat'), contacts[id]?.cat);
+    const b = isBlocked(id);
+    $('pfBlock').textContent = b ? 'إلغاء الحظر' : 'حظر';
+    $('pfChat').hidden = b; $('pfPing').hidden = b;
+    $('pfBlockedNote').hidden = !b;
+  }
 }
 
 async function saveMe(fields, change, msg){
@@ -446,7 +575,7 @@ $('copyPin').addEventListener('click', async () => { try { await navigator.clipb
 // تغيير رمز PIN: نحجز الرمز الجديد، نحدّث الملف، ثم نحذف القديم
 async function changePin(pin){
   pin = pin.toUpperCase();
-  if (!/^[0-9A-F]{8}$/.test(pin)) { toast('الرمز لازم يكون 8 خانات: أرقام 0-9 وحروف A-F'); return; }
+  if (!/^[0-9A-Z]{8}$/.test(pin)) { toast('الرمز لازم يكون 8 خانات: أرقام وحروف إنجليزية'); return; }
   if (pin === me.pin) { toast('هذا رمزك الحالي'); return; }
   const old = me.pin;
   try {
@@ -481,6 +610,13 @@ $('photoInput').addEventListener('change', async e => {
 });
 
 $('pfChat').addEventListener('click', () => openChat(profileId));
+$('pfBlock').addEventListener('click', async () => {
+  const id = profileId, b = isBlocked(id);
+  if (!b) { const ok = await askText('حظر ' + nameOf(id) + '؟ ما راح يقدر يراسلك أو يضيفك. اكتب "حظر" للتأكيد'); if (ok !== 'حظر') return; }
+  setBlocked(id, !b);
+});
+$('pfReport').addEventListener('click', () => reportUser(profileId));
+$('chUnblock').addEventListener('click', () => chatPeer && setBlocked(chatPeer, false));
 $('pfPing').addEventListener('click', async () => { await openChat(profileId); sendMsg({ kind: 'ping' }); });
 $('pfCat').addEventListener('change', () => fs.doc('users/' + uid + '/contacts/' + profileId).set({ cat: $('pfCat').value }, { merge: true }).then(() => toast('تم النقل')));
 $('pfDelete').addEventListener('click', async () => {
@@ -507,7 +643,7 @@ async function openChat(peer){
       msgs = s.docs.map(d => ({ id: d.id, pending: d.metadata.hasPendingWrites, ...d.data() })).reverse();
       if (!firstMsgsSnap) {
         const fresh = s.docChanges().filter(c => c.type === 'added' && c.doc.data().from !== uid);
-        if (fresh.some(c => c.doc.data().kind !== 'ping')) { play('incoming'); buzz(120); }
+        if (!isBlocked(peer) && fresh.some(c => c.doc.data().kind !== 'ping')) { play('incoming'); buzz(120); }
       }
       firstMsgsSnap = false;
       renderMsgs(true);
@@ -521,6 +657,9 @@ function renderChatHead(){
   $('chName').textContent = d.name || 'جهة اتصال';
   $('chStatus').className = 'st-icon' + (d.busy ? ' busy' : isOnline(chatPeer) ? '' : ' off');
   $('chMsg').textContent = d.msg || (d.busy ? 'مشغول' : isOnline(chatPeer) ? 'متوفر' : 'غير متصل');
+  const b = isBlocked(chatPeer);
+  $('composer').hidden = b; $('pingBtn').hidden = b; $('sendBtn').hidden = b; if (b) $('emojiPanel').hidden = true;
+  $('blockedBar').hidden = !b;
 }
 $('chInfo').addEventListener('click', () => chatPeer && openProfile(chatPeer));
 

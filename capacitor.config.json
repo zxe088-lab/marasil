@@ -1,0 +1,9 @@
+{
+  "appId": "com.zxe088.bpmold",
+  "appName": "BPM old",
+  "webDir": "www",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#1c2023"
+  }
+}

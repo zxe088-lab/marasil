@@ -1,0 +1,85 @@
+# بناء تطبيق BPM old للآيفون على Codemagic ورفعه لـ TestFlight
+workflows:
+  ios-release:
+    name: BPM old - iOS
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    integrations:
+      app_store_connect: BPM old API      # نفس الاسم اللي تعطيه للمفتاح في إعدادات Codemagic
+    environment:
+      groups:
+        - ios_signing                     # فيها CERTIFICATE_PRIVATE_KEY
+      vars:
+        BUNDLE_ID: com.zxe088.bpmold
+        APP_NAME: BPM old
+        XCODE_WORKSPACE: ios/App/App.xcworkspace
+        XCODE_SCHEME: App
+      node: 20
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Prepare web files
+        script: |
+          rm -rf www && mkdir -p www
+          cp index.html app.js style.css firebase-config.js manifest.json icon-192.png icon-512.png www/
+          for f in privacy.html terms.html; do [ -f "$f" ] && cp "$f" www/; done
+          [ -d sounds ] && cp -r sounds www/ || true
+
+      - name: Install packages
+        script: npm install
+
+      - name: Bundle Firebase locally
+        script: |
+          npm run bundle-firebase
+          python3 - <<'PY'
+          import re
+          p = 'www/index.html'
+          s = open(p, encoding='utf-8').read()
+          s = re.sub(r'\s*<script src="https://www\.gstatic\.com/firebasejs/[^"]+"></script>', '', s)
+          s = s.replace('<script src="firebase-config.js"></script>',
+                        '<script src="firebase-bundle.js"></script>\n<script src="firebase-config.js"></script>')
+          open(p, 'w', encoding='utf-8').write(s)
+          PY
+          grep -q firebase-bundle.js www/index.html
+
+      - name: Create iOS project
+        script: |
+          npx cap add ios
+          mkdir -p assets
+          cp icon-1024.png assets/icon-only.png
+          cp icon-1024.png assets/icon-foreground.png
+          cp icon-1024.png assets/icon-background.png
+          npx capacitor-assets generate --ios
+          npx cap sync ios
+
+      - name: App settings
+        script: |
+          PLIST=ios/App/App/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName $APP_NAME" "$PLIST" \
+            || /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string $APP_NAME" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" "$PLIST" || true
+
+      - name: Code signing
+        script: |
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_STORE --create
+          keychain add-certificates
+          xcode-project use-profiles
+
+      - name: Build number
+        script: |
+          cd ios/App
+          agvtool new-version -all $((BUILD_NUMBER + 1))
+
+      - name: Build ipa
+        script: |
+          xcode-project build-ipa --workspace "$XCODE_WORKSPACE" --scheme "$XCODE_SCHEME"
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true

@@ -6,8 +6,11 @@
 <meta name="theme-color" content="#0b7fc7">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="BPM old">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="manifest" href="manifest.json">
-<title>مراسيل</title>
+<title>BPM old</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -30,15 +33,24 @@
   <section id="s-loading" class="screen"><p>جاري الاتصال…</p></section>
 
   <section id="s-error" class="screen" hidden>
-    <h1>مراسيل</h1>
+    <h1>BPM old</h1>
     <p id="errText">ما قدرنا نتصل بالسيرفر.</p>
+  </section>
+
+  <section id="s-login" class="screen" hidden>
+    <div class="setup-icon"><svg><use href="#i-chats"/></svg></div>
+    <h1>BPM old</h1>
+    <p>ادخل بحساب قوقل عشان يبقى حسابك ورمز PIN حقك محفوظ، حتى لو غيّرت جوالك.</p>
+    <button type="button" class="btn primary" id="googleLoginBtn">الدخول بحساب قوقل</button>
+    <button type="button" class="btn" id="anonLoginBtn">الدخول بدون حساب</button>
   </section>
 
   <section id="s-setup" class="screen" hidden>
     <div class="setup-icon"><svg><use href="#i-chats"/></svg></div>
-    <h1>أهلاً في مراسيل</h1>
+    <h1>أهلاً في BPM old</h1>
     <p>اكتب اسم العرض حقك، وبيطلع لك رمز PIN خاص. أصحابك يضيفونك فيه بدل رقم جوالك.</p>
     <input id="setupName" maxlength="40" placeholder="اسم العرض" autocomplete="off">
+    <label class="check agree"><input type="checkbox" id="agreeTerms"> أوافق على <a href="https://zxe088-lab.github.io/marasil/terms.html" target="_blank" rel="noopener">شروط الاستخدام</a> و<a href="https://zxe088-lab.github.io/marasil/privacy.html" target="_blank" rel="noopener">سياسة الخصوصية</a></label>
     <button type="button" class="btn primary" id="setupBtn">ابدأ</button>
   </section>
 
@@ -117,9 +129,25 @@
         <label class="lbl" for="pfCat">نقل إلى فئة:</label>
         <select id="pfCat"></select>
         <button type="button" class="btn danger" id="pfDelete">حذف جهة الاتصال</button>
+        <div class="hint" id="pfBlockedNote" hidden>حظرت هذا الشخص. ما يقدر يراسلك أو يضيفك.</div>
+        <div class="row2">
+          <button type="button" class="btn danger" id="pfBlock">حظر</button>
+          <button type="button" class="btn danger" id="pfReport">إبلاغ</button>
+        </div>
       </div>
 
       <div class="actions" id="meEdit">
+        <div class="card">
+          <div class="lbl">الحساب</div>
+          <div class="hint" id="accState"></div>
+          <button type="button" class="btn primary" id="linkGoogleBtn">ربط حسابي بقوقل</button>
+          <button type="button" class="btn danger" id="signOutBtn">تسجيل خروج</button>
+          <button type="button" class="btn danger" id="deleteAccBtn">حذف الحساب</button>
+          <div class="links">
+            <a href="https://zxe088-lab.github.io/marasil/privacy.html" target="_blank" rel="noopener">سياسة الخصوصية</a>
+            <a href="https://zxe088-lab.github.io/marasil/terms.html" target="_blank" rel="noopener">شروط الاستخدام</a>
+          </div>
+        </div>
         <div class="card">
           <div class="row2">
             <button type="button" class="btn" id="photoBtn">تغيير صورة العرض</button>
@@ -168,6 +196,10 @@
     </button>
     <main id="msgList"></main>
     <div class="typing" id="typing"></div>
+    <div class="blockedbar" id="blockedBar" hidden>
+      <span>حظرت هذا الشخص</span>
+      <button type="button" class="btn sm" id="chUnblock">إلغاء الحظر</button>
+    </div>
     <form class="composer" id="composer">
       <input id="msgInput" maxlength="2000" placeholder="أدخل رسالة" autocomplete="off">
       <button type="button" class="smile" id="emojiBtn" aria-label="وجوه تعبيرية"><svg><use href="#i-smile"/></svg></button>

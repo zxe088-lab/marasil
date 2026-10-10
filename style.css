@@ -144,6 +144,12 @@ form.composer input:not(:placeholder-shown){font-style:normal}
 .tn-state{font-size:12px;color:var(--muted)}
 .tn-btns{display:flex;gap:6px}
 .btn.sm{padding:6px 10px;font-size:13px}
+.agree{justify-content:center;font-weight:500;font-size:14px;line-height:1.6;flex-wrap:wrap}
+.agree a,.links a{color:var(--blue2)}
+.links{display:flex;gap:16px;justify-content:center;font-size:13px;padding-top:4px}
+.blockedbar{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;background:#fdecec;color:var(--red);font-weight:600;border-top:1px solid #f3c2c2}
+.tile.blocked{opacity:.55;filter:grayscale(1)}
+.tile .tblocked{position:absolute;top:6px;inset-inline-end:6px;background:var(--red);color:#fff;font-size:11px;font-weight:700;padding:1px 6px;border-radius:3px}
 .check{display:flex;align-items:center;gap:8px;font-weight:600}
 .check input{width:18px;height:18px}
 .panel{display:flex;flex-direction:column;gap:4px}

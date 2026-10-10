@@ -1,0 +1,86 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- دوال مساعدة ----------
+    function signedIn() { return request.auth != null; }
+    // صاحب التطبيق (يغيّر رمز PIN ويقرأ البلاغات)
+    function isAdmin() { return signedIn() && request.auth.uid == '7KzlcizFv8TrIeqRVqi6BjNoCue2'; }
+    function isMember(chatId) {
+      return request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.members;
+    }
+    // هل المستخدم userId حاظر الشخص اللي يطلب؟
+    function blockedBy(userId) {
+      return exists(/databases/$(database)/documents/users/$(userId)/blocked/$(request.auth.uid));
+    }
+    function validUser() {
+      return request.resource.data.size() < 30
+        && (!('name' in request.resource.data) || request.resource.data.name.size() <= 40)
+        && (!('msg' in request.resource.data) || request.resource.data.msg.size() <= 120)
+        && (!('photo' in request.resource.data) || request.resource.data.photo.size() < 60000);
+    }
+
+    // ---------- المستخدمين ----------
+    match /users/{userId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.auth.uid == userId && validUser();
+      // تغيير رمز PIN مسموح للمالك فقط
+      allow update: if signedIn() && request.auth.uid == userId && validUser()
+                    && (request.resource.data.pin == resource.data.pin || isAdmin());
+      // حذف الحساب (شرط من آبل)
+      allow delete: if signedIn() && request.auth.uid == userId;
+
+      // جهات الاتصال: المحظور ما يقدر يضيف نفسه عندك
+      match /contacts/{contactId} {
+        allow read, delete: if signedIn() && request.auth.uid == userId;
+        allow create, update: if signedIn()
+          && (request.auth.uid == userId || (request.auth.uid == contactId && !blockedBy(userId)));
+      }
+
+      // قائمة الحظر (شرط من آبل)
+      match /blocked/{otherId} {
+        allow read, write: if signedIn() && request.auth.uid == userId;
+      }
+    }
+
+    // ---------- رموز PIN ----------
+    match /pins/{pin} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid
+                    && (!exists(/databases/$(database)/documents/users/$(request.auth.uid)) || isAdmin());
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    // ---------- المحادثات ----------
+    match /chats/{chatId} {
+      allow read: if signedIn() && request.auth.uid in resource.data.members;
+      allow create: if signedIn()
+        && request.resource.data.members.size() == 2
+        && request.auth.uid in request.resource.data.members
+        && !blockedBy(request.resource.data.members[0])
+        && !blockedBy(request.resource.data.members[1]);
+      allow update: if signedIn()
+        && request.auth.uid in resource.data.members
+        && !blockedBy(resource.data.members[0])
+        && !blockedBy(resource.data.members[1]);
+
+      match /messages/{messageId} {
+        allow read: if signedIn() && isMember(chatId);
+        allow create: if signedIn() && isMember(chatId)
+          && request.resource.data.from == request.auth.uid
+          && (!('text' in request.resource.data) || request.resource.data.text.size() <= 2000)
+          && !blockedBy(chatId.split('_')[0])
+          && !blockedBy(chatId.split('_')[1]);
+      }
+    }
+
+    // ---------- البلاغات (شرط من آبل) ----------
+    match /reports/{reportId} {
+      allow create: if signedIn()
+        && request.resource.data.from == request.auth.uid
+        && request.resource.data.size() <= 10
+        && (!('reason' in request.resource.data) || request.resource.data.reason.size() <= 500);
+      allow read, delete: if isAdmin();
+    }
+  }
+}
