@@ -23,7 +23,7 @@ workflows:
           rm -rf www && mkdir -p www
           cp index.html app.js style.css firebase-config.js manifest.json icon-192.png icon-512.png www/
           for f in privacy.html terms.html; do [ -f "$f" ] && cp "$f" www/; done
-          # مجلد sounds (نغمات الموقع) ما ينضاف لتطبيق المتجر عمداً
+          cp -R sounds www/sounds
 
       - name: Install packages
         script: npm install

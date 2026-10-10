@@ -2,6 +2,16 @@
 'use strict';
 
 const $ = id => document.getElementById(id);
+// Keep the composer visible when the iPhone keyboard changes the visible viewport.
+function syncViewport(){
+  const viewport = window.visualViewport;
+  if (viewport && viewport.scale === 1) {
+    document.documentElement.style.setProperty('--app-height', viewport.height + 'px');
+  }
+}
+window.visualViewport?.addEventListener('resize', syncViewport);
+window.addEventListener('resize', syncViewport);
+syncViewport();
 const COLORS = ['#c0392b','#2e86c1','#239b56','#b9770e','#7d3c98','#148f77','#a04000','#2c3e8f'];
 const COUNTRIES = [
   ['SA','السعودية'],['KW','الكويت'],['AE','الإمارات'],['QA','قطر'],['BH','البحرين'],['OM','عُمان'],
@@ -97,7 +107,7 @@ const SOUNDS = {
 };
 /* نغمات خاصة: 1) ملف يختاره الشخص من جواله (محفوظ في جهازه)  2) ملف في مجلد sounds على السيرفر  3) النغمة الافتراضية */
 const TONE_NAMES = { incoming: 'رسالة واردة', ping: 'الوكزة PING', sent: 'إرسال رسالة', contact: 'تحديثات الأصحاب' };
-// ملفات النغمات تشتغل بعنصر <audio> لأنه يشتغل حتى والآيفون على الصامت (عكس الأصوات المولّدة)
+// تشغيل ملفات النغمات عبر عنصر audio، مع احترام قيود التشغيل في النظام.
 const toneEls = {};      // name -> Audio
 const toneOrigin = {};   // 'device' | 'site'
 async function loadTone(name){
@@ -105,7 +115,9 @@ async function loadTone(name){
   let src = null;
   try { src = localStorage.getItem('marasil-tone-' + name); } catch {}
   if (src) toneOrigin[name] = 'device';
-  else {
+  else if (IS_NATIVE && name === 'incoming') {
+    src = 'sounds/incoming.mp3'; toneOrigin[name] = 'site';
+  } else {
     for (const ext of ['mp3', 'm4a', 'wav', 'ogg']) {
       try {
         const r = await fetch('sounds/' + name + '.' + ext, { method: 'HEAD', cache: 'no-cache' });
