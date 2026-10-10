@@ -1,0 +1,109 @@
+# بناء تطبيق BPM old للآيفون على GitHub Actions ورفعه لـ TestFlight
+# بديل لـ codemagic.yaml — نفس الخطوات ونفس أدوات التوقيع (codemagic-cli-tools)
+name: BPM old - iOS (GitHub Actions)
+
+on:
+  workflow_dispatch:        # تشغيل يدوي فقط من تبويب Actions
+
+jobs:
+  ios-release:
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      BUNDLE_ID: com.zxe088.bpmold
+      APP_NAME: BPM old
+      XCODE_WORKSPACE: ios/App/App.xcworkspace
+      XCODE_SCHEME: App
+      # مفاتيح App Store Connect والشهادة — تُضاف في Settings > Secrets and variables > Actions
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+      APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_IDENTIFIER }}
+      APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+      CERTIFICATE_PRIVATE_KEY: ${{ secrets.CERTIFICATE_PRIVATE_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Install Codemagic CLI tools
+        run: pip3 install --break-system-packages codemagic-cli-tools || pip3 install codemagic-cli-tools
+
+      - name: Prepare web files
+        run: |
+          rm -rf www && mkdir -p www
+          cp index.html app.js style.css firebase-config.js manifest.json icon-192.png icon-512.png www/
+          for f in privacy.html terms.html; do [ -f "$f" ] && cp "$f" www/; done
+          # sounds/bbm.mp3 is for the website only, not bundled in the App Store build
+          grep -q 'data-section="pending"' www/index.html
+          node --check www/app.js
+
+      - name: Install packages
+        run: npm install
+
+      - name: Bundle Firebase locally
+        run: |
+          npm run bundle-firebase
+          python3 - <<'PY'
+          import re
+          p = 'www/index.html'
+          s = open(p, encoding='utf-8').read()
+          s = re.sub(r'\s*<script src="https://www\.gstatic\.com/firebasejs/[^"]+"></script>', '', s)
+          s = s.replace('<script src="firebase-config.js"></script>',
+                        '<script src="firebase-bundle.js"></script>\n<script src="firebase-config.js"></script>')
+          open(p, 'w', encoding='utf-8').write(s)
+          PY
+          grep -q firebase-bundle.js www/index.html
+
+      - name: Create iOS project
+        run: |
+          npx cap add ios
+          mkdir -p assets
+          cp icon-1024.png assets/icon-only.png
+          cp icon-1024.png assets/icon-foreground.png
+          cp icon-1024.png assets/icon-background.png
+          npx capacitor-assets generate --ios
+          npx cap sync ios
+
+      - name: App settings
+        run: |
+          PLIST=ios/App/App/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString 1.1.0" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName $APP_NAME" "$PLIST" \
+            || /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string $APP_NAME" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" "$PLIST" || true
+
+      - name: Code signing
+        run: |
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_STORE --create
+          keychain add-certificates
+          xcode-project use-profiles
+
+      - name: Build number
+        run: |
+          # رقم بناء متزايد دائمًا بحسب التاريخ والوقت (UTC)
+          cd ios/App
+          agvtool new-version -all "$(date -u +%Y%m%d%H%M)"
+
+      - name: Build ipa
+        run: |
+          xcode-project build-ipa --workspace "$XCODE_WORKSPACE" --scheme "$XCODE_SCHEME"
+
+      - name: Upload to TestFlight
+        run: |
+          app-store-connect publish --path build/ios/ipa/*.ipa --testflight
+
+      - name: Save ipa and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build
+          path: |
+            build/ios/ipa/*.ipa
+            /tmp/xcodebuild_logs/*.log
+          if-no-files-found: ignore
