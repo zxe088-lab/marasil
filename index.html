@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b7fc7">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<title>مراسيل</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<!-- أيقونات -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-updates" viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 13.7-5.6M20 12a8 8 0 0 1-13.7 5.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M18.5 2.5v4.5H14M5.5 21.5V17H10" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-chats" viewBox="0 0 24 24"><path d="M3 4h18v12H9l-5 4v-4H3z" fill="currentColor"/><g fill="#1c2023"><circle cx="8" cy="8.5" r="1.2"/><circle cx="12" cy="8.5" r="1.2"/><circle cx="16" cy="8.5" r="1.2"/><circle cx="10" cy="12" r="1.2"/><circle cx="14" cy="12" r="1.2"/></g></symbol>
+  <symbol id="i-contacts" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4.2" fill="currentColor"/><path d="M3.5 21c.8-4.6 4.2-7 8.5-7s7.7 2.4 8.5 7z" fill="currentColor"/></symbol>
+  <symbol id="i-add" viewBox="0 0 24 24"><circle cx="10" cy="8" r="4" fill="currentColor"/><path d="M2 21c.7-4.4 3.8-6.8 8-6.8 1.6 0 3 .3 4.2 1" fill="currentColor"/><path d="M19 13v8M15 17h8" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M9 4l8 8-8 8" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M3 4h18v12H9l-5 4v-4H3z" fill="currentColor"/><path d="M12 7v6M9.5 9.5L12 7l2.5 2.5" stroke="#1c2023" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-ping" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0-6 6v4l-2 3h16l-2-3V9a6 6 0 0 0-6-6zM10 19a2 2 0 0 0 4 0" fill="currentColor"/></symbol>
+  <symbol id="i-smile" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#ffcf26" stroke="#d9a400"/><circle cx="8.7" cy="10" r="1.3" fill="#3b2a00"/><circle cx="15.3" cy="10" r="1.3" fill="#3b2a00"/><path d="M7.5 14c1.2 2 2.7 3 4.5 3s3.3-1 4.5-3" stroke="#3b2a00" stroke-width="1.6" fill="none" stroke-linecap="round"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="19" r="2" fill="currentColor"/></symbol>
+</svg>
+
+<div id="app">
+
+  <section id="s-loading" class="screen"><p>جاري الاتصال…</p></section>
+
+  <section id="s-error" class="screen" hidden>
+    <h1>مراسيل</h1>
+    <p id="errText">ما قدرنا نتصل بالسيرفر.</p>
+  </section>
+
+  <section id="s-setup" class="screen" hidden>
+    <div class="setup-icon"><svg><use href="#i-chats"/></svg></div>
+    <h1>أهلاً في مراسيل</h1>
+    <p>اكتب اسم العرض حقك، وبيطلع لك رمز PIN خاص. أصحابك يضيفونك فيه بدل رقم جوالك.</p>
+    <input id="setupName" maxlength="40" placeholder="اسم العرض" autocomplete="off">
+    <button type="button" class="btn primary" id="setupBtn">ابدأ</button>
+  </section>
+
+  <!-- الرئيسية -->
+  <div id="s-home" class="view" hidden>
+    <button type="button" class="bluebar" id="meHead">
+      <span id="meHeadAvatar"></span>
+      <span class="bb-info">
+        <span class="bb-name"><span class="st-icon" id="meHeadStatus"></span><span id="meHeadName"></span></span>
+        <span class="bb-msg" id="meHeadMsg"></span>
+      </span>
+      <span class="led" id="led" title="رسائل جديدة"></span>
+    </button>
+
+    <div class="view" id="t-updates" hidden>
+      <div class="scroll" id="updatesList"></div>
+    </div>
+
+    <div class="view" id="t-chats">
+      <div class="scroll" id="chatList"></div>
+    </div>
+
+    <div class="view" id="t-contacts" hidden>
+      <div class="searchbox"><input id="search" placeholder="بحث في جهات الاتصال" autocomplete="off"></div>
+      <div class="scroll" id="contactList"></div>
+    </div>
+
+    <nav class="tabbar">
+      <button type="button" data-tab="updates"><svg><use href="#i-updates"/></svg><span>التحديثات</span><i class="dotnew" id="updDot" hidden></i></button>
+      <button type="button" data-tab="chats" class="on"><svg><use href="#i-chats"/></svg><span>الدردشات</span><i class="cnt" id="unreadBadge" hidden></i></button>
+      <button type="button" data-tab="contacts"><svg><use href="#i-contacts"/></svg><span>جهات الاتصال</span></button>
+      <button type="button" id="addContactBtn"><svg><use href="#i-add"/></svg><span>إضافة</span></button>
+    </nav>
+  </div>
+
+  <!-- إضافة جهة اتصال -->
+  <div id="s-add" class="view" hidden>
+    <div class="bluebar plain"><span class="bb-title">إضافة جهة اتصال</span></div>
+    <form class="panel" id="addForm">
+      <div class="card">
+        <label class="lbl" for="addPin">رمز PIN:</label>
+        <input id="addPin" class="pininput" maxlength="8" placeholder="2B4F9A1C" autocomplete="off" autocapitalize="characters">
+        <label class="lbl" for="addCat">الفئة:</label>
+        <div class="line"><select id="addCat"></select><button type="button" class="btn" id="addCatBtn">فئة جديدة</button></div>
+      </div>
+      <button type="submit" class="btn primary">إرسال دعوة وإضافة</button>
+    </form>
+    <div class="spacer"></div>
+    <nav class="actionbar"><button type="button" data-back><svg><use href="#i-back"/></svg><span>رجوع</span></button></nav>
+  </div>
+
+  <!-- ملف التعريف -->
+  <div id="s-profile" class="view" hidden>
+    <div class="bluebar plain"><span class="bb-title" id="pfTitle">ملف تعريف جهة الاتصال</span></div>
+    <div class="scroll graybg">
+      <div class="card">
+        <div class="pf-top">
+          <div class="pf-photo"><span id="pfAvatar"></span><span class="pf-pin pin" id="pfPinSmall"></span></div>
+          <div class="pf-fields"><div class="lbl">اسم العرض:</div><div class="box" id="pfName"></div></div>
+        </div>
+        <div class="kv"><span class="lbl">رمز PIN:</span><span class="pin val" id="pfPin"></span></div>
+        <div class="lbl">رسالة شخصية:</div>
+        <div class="box soft" id="pfMsg"></div>
+        <div class="kv"><span class="lbl">الحالة:</span><span class="val" id="pfStatus"></span></div>
+        <div class="loc">
+          <div class="lbl">موقع:</div>
+          <div class="kv"><span class="flag" id="pfFlag"></span></div>
+          <div class="kv"><span class="lbl">المنطقة الزمنية:</span><span class="val" id="pfTz"></span></div>
+          <div class="kv"><span class="lbl">التوقيت المحلي:</span><span class="val" id="pfTime"></span></div>
+        </div>
+      </div>
+
+      <div class="actions" id="pfActions">
+        <button type="button" class="btn primary" id="pfChat">بدء الدردشة</button>
+        <button type="button" class="btn ping" id="pfPing">PING!!!</button>
+        <label class="lbl" for="pfCat">نقل إلى فئة:</label>
+        <select id="pfCat"></select>
+        <button type="button" class="btn danger" id="pfDelete">حذف جهة الاتصال</button>
+      </div>
+
+      <div class="actions" id="meEdit">
+        <div class="card">
+          <div class="row2">
+            <button type="button" class="btn" id="photoBtn">تغيير صورة العرض</button>
+            <button type="button" class="btn" id="photoDel">إزالة</button>
+          </div>
+          <input type="file" id="photoInput" accept="image/*" hidden>
+          <label class="lbl" for="edName">اسم العرض:</label>
+          <input id="edName" maxlength="40">
+          <label class="lbl" for="edMsg">رسالة شخصية:</label>
+          <input id="edMsg" maxlength="120" placeholder="اكتب رسالتك الشخصية">
+          <label class="lbl">الحالة:</label>
+          <div class="row2">
+            <button type="button" class="btn" id="setAvail"><span class="st-icon"></span> متوفر</button>
+            <button type="button" class="btn" id="setBusy"><span class="st-icon busy"></span> مشغول</button>
+          </div>
+          <label class="lbl" for="edCountry">الدولة:</label>
+          <select id="edCountry"></select>
+          <label class="check"><input type="checkbox" id="edMute"> كتم النغمات</label>
+        </div>
+        <div class="card">
+          <div class="lbl">النغمات</div>
+          <div class="hint">اختر ملف صوت من جوالك لكل نغمة. النغمة تنحفظ في جهازك أنت فقط.</div>
+          <div id="toneList"></div>
+        </div>
+        <button type="button" class="btn primary" id="edSave">حفظ</button>
+        <button type="button" class="btn" id="copyPin">نسخ رمز PIN</button>
+      </div>
+    </div>
+    <nav class="actionbar"><button type="button" data-back><svg><use href="#i-back"/></svg><span>رجوع</span></button></nav>
+  </div>
+
+  <!-- الدردشة -->
+  <div id="s-chat" class="view" hidden>
+    <button type="button" class="bluebar" id="chInfo">
+      <span id="chAvatar"></span>
+      <span class="bb-info">
+        <span class="bb-name"><span class="st-icon" id="chStatus"></span><span id="chName"></span></span>
+        <span class="bb-msg" id="chMsg"></span>
+      </span>
+    </button>
+    <main id="msgList"></main>
+    <div class="typing" id="typing"></div>
+    <form class="composer" id="composer">
+      <input id="msgInput" maxlength="2000" placeholder="أدخل رسالة" autocomplete="off">
+      <button type="button" class="smile" id="emojiBtn" aria-label="وجوه تعبيرية"><svg><use href="#i-smile"/></svg></button>
+    </form>
+    <div class="emojis" id="emojiPanel" hidden></div>
+    <nav class="actionbar">
+      <button type="button" data-back><svg><use href="#i-back"/></svg><span>رجوع</span></button>
+      <button type="button" id="pingBtn" class="pingact"><svg><use href="#i-ping"/></svg><span>وكز</span></button>
+      <button type="button" id="sendBtn"><svg><use href="#i-send"/></svg><span>إرسال</span></button>
+    </nav>
+  </div>
+
+  <!-- نافذة -->
+  <div id="modal" class="modal" hidden>
+    <form class="modal-box" id="modalForm">
+      <div class="modal-title" id="modalTitle"></div>
+      <input id="modalInput" maxlength="30" autocomplete="off">
+      <div class="row2">
+        <button type="submit" class="btn primary">موافق</button>
+        <button type="button" class="btn" id="modalCancel">إلغاء</button>
+      </div>
+    </form>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
