@@ -15,7 +15,7 @@ workflows:
         XCODE_WORKSPACE: ios/App/App.xcworkspace
         XCODE_SCHEME: App
       node: 20
-      xcode: latest
+      xcode: 26.6
       cocoapods: default
     scripts:
       - name: Prepare web files
