@@ -64,9 +64,10 @@ jobs:
         run: |
           npx cap add ios
           mkdir -p assets
-          cp icon-1024.png assets/icon-only.png
-          cp icon-1024.png assets/icon-foreground.png
-          cp icon-1024.png assets/icon-background.png
+          # App Store icons must not have an alpha channel
+          node -e "require('sharp')('icon-1024.png').flatten({background:'#000000'}).removeAlpha().png().toFile('assets/icon-only.png')"
+          cp assets/icon-only.png assets/icon-foreground.png
+          cp assets/icon-only.png assets/icon-background.png
           npx capacitor-assets generate --ios
           npx cap sync ios
 
