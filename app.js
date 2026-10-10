@@ -211,7 +211,7 @@ function nudgeEffect(){
 }
 
 /* ---------- التنقل ---------- */
-const SCREENS = ['s-loading','s-error','s-login','s-setup','s-home','s-add','s-profile','s-chat'];
+const SCREENS = ['s-loading','s-error','s-login','s-setup','s-home','s-add','s-menu','s-profile','s-chat'];
 function show(id, push = true){
   const cur = SCREENS.find(s => !$(s).hidden);
   if (push && cur && cur !== id && !['s-loading','s-error','s-login','s-setup'].includes(cur)) stack.push(cur);
@@ -225,9 +225,9 @@ document.querySelectorAll('[data-back]').forEach(b => b.addEventListener('click'
 
 function setTab(t){
   tab = t;
-  ['updates','chats','contacts','friends','groups','pending'].forEach(k => $('t-' + k).hidden = k !== t);
-  document.querySelectorAll('[data-section]').forEach(b => {
+  document.querySelectorAll('.classic-menu [data-section]').forEach(b => {
     const active = b.dataset.section === t;
+    const panel = document.getElementById(b.getAttribute('aria-controls')); if (panel) panel.hidden = !active;
     b.classList.toggle('selected', active);
     b.setAttribute('aria-expanded', String(active));
     b.querySelector('.category-toggle').textContent = active ? '−' : '+';
@@ -442,6 +442,7 @@ const unreadOf = c => c.lastFrom && c.lastFrom !== uid && c.lastTs > ((c.read ||
 
 function renderHome(){
   if (!me) return;
+  buildMenu();
   $('meHeadAvatar').replaceChildren(avatar(uid, 'sm'));
   $('meHeadName').textContent = me.name;
   $('meHeadMsg').textContent = me.msg || (me.busy ? 'مشغول' : 'متوفر');
@@ -450,7 +451,7 @@ function renderHome(){
   $('classicChatsCount').textContent = '(' + Object.values(chats).filter(c => c.lastTs && !isBlocked(c.members.find(m => m !== uid)) && !gone[c.members.find(m => m !== uid)]).length + ')';
   $('classicNamesCount').textContent = '(' + contactIds.length + ')';
   $('classicFriendsCount').textContent = '(' + contactIds.filter(id => !isBlocked(id)).length + ')';
-  if (tab === 'chats') renderChats(); else if (tab === 'contacts' || tab === 'friends') renderContacts(); else if (tab === 'updates') renderUpdates(); else if (tab === 'pending') renderPending(); else if (tab === 'groups') renderGroups();
+  if (tab === 'chats') renderChats(); else if (tab === 'contacts' || tab === 'friends') renderContacts(); else if (tab === 'updates') renderUpdates(); else if (tab === 'pending') renderPending(); else if (tab === 'groups') renderGroups(); else if (tab && tab.startsWith('cat:')) renderCatPanel(tab);
   $('classicUpdatesCount').textContent = '(' + recentUpdates().length + ')';
   $('classicGroupsCount').textContent = groupsReadable ? '(' + Object.keys(groups).length + ')' : '(—)';
   $('classicPendingCount').textContent = requestsReadable ? '(' + pendingRequests().length + ')' : '(—)';
@@ -491,7 +492,7 @@ function renderContacts(){
     if (!inCat.length && (q || cats.length > 1)) return;
     const open = !closedCats[cat] || q;
     const h = el('button', 'cathead'); h.type = 'button';
-    h.append(el('span', 'grow', cat), el('span', 'n', inCat.length), el('span', 'tog', open ? '−' : '+'));
+    h.append(el('span', 'grow', catLabel(cat)), el('span', 'n', inCat.length), el('span', 'tog', open ? '−' : '+'));
     h.addEventListener('click', () => { closedCats[cat] = !closedCats[cat]; saveLocal(); renderContacts(); });
     list.append(h);
     if (!open) return;
@@ -512,6 +513,128 @@ function renderContacts(){
   });
 }
 $('search').addEventListener('input', renderContacts);
+
+/* ---------- القائمة القابلة للتعديل ---------- */
+const BUILTIN = ['chats', 'updates', 'contacts', 'friends', 'groups', 'pending'];
+const BUILTIN_LABEL = { chats: 'الدردشات', updates: 'التحديثات', contacts: 'الأسماء', friends: 'الأصدقاء', groups: 'المجموعات', pending: 'المعلّق' };
+const userCats = () => (me.cats || [DEFAULT_CAT]).filter(c => c !== DEFAULT_CAT);
+const defaultLabel = k => k.startsWith('cat:') ? k.slice(4) : BUILTIN_LABEL[k];
+function menuCfg(src = me.menu, cats = userCats()){
+  const m = src || {}, all = [...BUILTIN, ...cats.map(c => 'cat:' + c)];
+  const order = (m.order || []).filter(k => all.includes(k));
+  all.forEach(k => {
+    if (order.includes(k)) return;
+    const at = k.startsWith('cat:') ? order.indexOf('contacts') : -1;
+    at >= 0 ? order.splice(at, 0, k) : order.push(k);
+  });
+  return { order, labels: { ...(m.labels || {}) }, hidden: (m.hidden || []).filter(k => all.includes(k)) };
+}
+const labelOf = (k, cfg = menuCfg()) => (cfg.labels[k] || '').trim() || defaultLabel(k);
+const catLabel = c => c === DEFAULT_CAT ? c : labelOf('cat:' + c);
+const catDom = {};
+function catSection(key){
+  if (catDom[key]) return catDom[key];
+  const i = Object.keys(catDom).length + 1 + '-' + Date.now().toString(36);
+  const btn = el('button', 'classic-category'); btn.type = 'button'; btn.dataset.section = key;
+  btn.setAttribute('aria-expanded', 'false'); btn.setAttribute('aria-controls', 't-cat' + i);
+  const lab = el('span'); lab.append(el('span', 'cl'), ' ', el('span', 'cnt'));
+  btn.append(lab, el('span', 'category-toggle', '+'));
+  btn.addEventListener('click', () => setTab(tab === key ? null : key));
+  const panel = el('div', 'classic-panel'); panel.id = 't-cat' + i; panel.hidden = true;
+  const list = el('div', 'scroll'); panel.append(list);
+  return catDom[key] = { btn, panel, list };
+}
+function buildMenu(){
+  const cfg = menuCfg(), menu = document.querySelector('#s-home .classic-menu'), tail = $('menuEditBtn');
+  Object.keys(catDom).forEach(k => { if (!cfg.order.includes(k)) { catDom[k].btn.remove(); catDom[k].panel.remove(); delete catDom[k]; } });
+  cfg.order.forEach(k => {
+    let btn, panel;
+    if (k.startsWith('cat:')) ({ btn, panel } = catSection(k));
+    else { btn = menu.querySelector('[data-section="' + k + '"]'); panel = document.getElementById(btn.getAttribute('aria-controls')); }
+    btn.querySelector('.cl').textContent = labelOf(k, cfg);
+    if (k.startsWith('cat:')) btn.querySelector('.cnt').textContent = '(' + catMembers(k.slice(4)).length + ')';
+    const off = cfg.hidden.includes(k);
+    btn.hidden = off; if (off) panel.hidden = true;
+    menu.insertBefore(btn, tail); menu.insertBefore(panel, tail);
+  });
+  if (tab && cfg.hidden.includes(tab)) tab = null;
+}
+function catMembers(cat){
+  return Object.keys(contacts).filter(id => !gone[id] && (contacts[id].cat || DEFAULT_CAT) === cat).sort((a, b) => nameOf(a).localeCompare(nameOf(b), 'ar'));
+}
+function renderCatPanel(key){
+  const d = catDom[key]; if (!d) return;
+  const list = d.list; list.replaceChildren();
+  const ids = catMembers(key.slice(4));
+  if (!ids.length) { list.append(el('div', 'empty', 'الفئة فاضية. انقل لها أحداً من ملف تعريفه.')); return; }
+  const grid = el('div', 'grid');
+  ids.forEach(id => {
+    const t = el('button', 'row classic-contact'); t.type = 'button';
+    const info = el('span', 'info'), tn = el('span', 'nm');
+    tn.append(statusIcon(id), el('span', '', nameOf(id)));
+    info.append(tn, el('span', 'sub', users[id]?.msg || (users[id]?.busy ? 'مشغول' : isOnline(id) ? 'متوفر' : 'غير متصل')));
+    t.append(avatar(id, 'xs'), info);
+    if (isBlocked(id)) { t.classList.add('blocked'); t.append(el('span', 'tblocked', 'محظور')); }
+    else if (users[id]?.busy) t.append(el('span', 'tbusy', '−'));
+    t.addEventListener('click', () => openProfile(id));
+    grid.append(t);
+  });
+  list.append(grid);
+}
+
+let menuDraft = null;
+function openMenuEdit(){
+  const cats = userCats(), c = menuCfg(me.menu, cats);
+  menuDraft = { ...c, cats: [...cats], removed: [] };
+  $('menuNewCat').value = '';
+  renderMenuEdit(); show('s-menu');
+}
+function renderMenuEdit(){
+  const box = $('menuEditList'); box.replaceChildren();
+  const mk = (txt, cls, fn) => { const b = el('button', 'mb' + (cls ? ' ' + cls : ''), txt); b.type = 'button'; b.addEventListener('click', fn); return b; };
+  menuDraft.order.forEach((k, i) => {
+    const off = menuDraft.hidden.includes(k), row = el('div', 'medit' + (off ? ' off' : ''));
+    const inp = el('input'); inp.maxLength = 40; inp.value = menuDraft.labels[k] || ''; inp.placeholder = defaultLabel(k);
+    inp.addEventListener('input', () => { menuDraft.labels[k] = inp.value; });
+    const move = dir => { const j = i + dir; if (j < 0 || j >= menuDraft.order.length) return; [menuDraft.order[i], menuDraft.order[j]] = [menuDraft.order[j], menuDraft.order[i]]; renderMenuEdit(); };
+    row.append(inp, mk('▲', '', () => move(-1)), mk('▼', '', () => move(1)),
+      mk(off ? 'إظهار' : 'إخفاء', '', () => { menuDraft.hidden = off ? menuDraft.hidden.filter(x => x !== k) : [...menuDraft.hidden, k]; renderMenuEdit(); }));
+    if (k.startsWith('cat:')) row.append(mk('حذف', 'del', () => {
+      const name = k.slice(4);
+      menuDraft.order = menuDraft.order.filter(x => x !== k); menuDraft.hidden = menuDraft.hidden.filter(x => x !== k);
+      delete menuDraft.labels[k]; menuDraft.cats = menuDraft.cats.filter(c => c !== name); menuDraft.removed.push(name);
+      renderMenuEdit();
+    }));
+    else if (k === 'contacts' || k === 'chats') row.append(el('span', 'tag', 'أساسي'));
+    box.append(row);
+  });
+}
+$('menuAddCat').addEventListener('click', () => {
+  const name = $('menuNewCat').value.trim();
+  if (!name) return;
+  if (name === DEFAULT_CAT || menuDraft.cats.includes(name)) { toast('الفئة موجودة'); return; }
+  menuDraft.cats.push(name); menuDraft.removed = menuDraft.removed.filter(c => c !== name);
+  const at = menuDraft.order.indexOf('contacts'); menuDraft.order.splice(at >= 0 ? at : menuDraft.order.length, 0, 'cat:' + name);
+  $('menuNewCat').value = ''; renderMenuEdit();
+});
+$('menuReset').addEventListener('click', () => {
+  menuDraft.labels = {}; menuDraft.hidden = [];
+  menuDraft.order = menuCfg({}, menuDraft.cats).order; renderMenuEdit();
+});
+$('menuSave').addEventListener('click', async () => {
+  // الأساسية ما تنخفي كلها: لازم تبقى الدردشات أو الأسماء ظاهرة
+  if (menuDraft.hidden.includes('chats') && menuDraft.hidden.includes('contacts')) { toast('خلّ الدردشات أو الأسماء ظاهرة'); return; }
+  const labels = {};
+  Object.entries(menuDraft.labels).forEach(([k, v]) => { v = (v || '').trim().slice(0, 40); if (v && v !== defaultLabel(k)) labels[k] = v; });
+  const menu = { order: menuDraft.order, labels, hidden: menuDraft.hidden };
+  try {
+    await fs.doc('users/' + uid).update({ menu, cats: [DEFAULT_CAT, ...menuDraft.cats] });
+    await Promise.all(Object.keys(contacts).filter(id => menuDraft.removed.includes(contacts[id].cat))
+      .map(id => fs.doc('users/' + uid + '/contacts/' + id).set({ cat: DEFAULT_CAT }, { merge: true })));
+    toast('تم حفظ القائمة'); back();
+  } catch { toast('ما قدرنا نحفظ القائمة'); }
+});
+$('menuEditBtn').addEventListener('click', openMenuEdit);
 
 const CHANGE_TEXT = { msg: 'غيّر رسالته الشخصية', name: 'غيّر اسم العرض', photo: 'غيّر صورة العرض', status: 'غيّر حالته', join: 'صار من جهات الاتصال', country: 'غيّر موقعه' };
 function recentUpdates(){
@@ -589,7 +712,7 @@ function renderGroups(){
 /* ---------- إضافة جهة اتصال ---------- */
 function fillCatSelect(sel, value){
   sel.replaceChildren();
-  (me.cats || [DEFAULT_CAT]).forEach(c => { const o = el('option', '', c); o.value = c; sel.append(o); });
+  (me.cats || [DEFAULT_CAT]).forEach(c => { const o = el('option', '', catLabel(c)); o.value = c; sel.append(o); });
   sel.value = value || DEFAULT_CAT;
 }
 $('addContactBtn').addEventListener('click', () => { fillCatSelect($('addCat')); $('addPin').value = ''; show('s-add'); setTimeout(() => $('addPin').focus(), 50); });
@@ -634,9 +757,33 @@ $('addCatBtn').addEventListener('click', async () => {
 function openProfile(id){ profileId = id; renderProfile(); show('s-profile'); }
 $('meHead').addEventListener('click', () => openProfile(uid));
 
+/* رمز PIN الشريطي (Code 39) */
+const C39 = {'0':'nnnwwnwnn','1':'wnnwnnnnw','2':'nnwwnnnnw','3':'wnwwnnnnn','4':'nnnwwnnnw','5':'wnnwwnnnn','6':'nnwwwnnnn','7':'nnnwnnwnw','8':'wnnwnnwnn','9':'nnwwnnwnn','A':'wnnnnwnnw','B':'nnwnnwnnw','C':'wnwnnwnnn','D':'nnnnwwnnw','E':'wnnnwwnnn','F':'nnwnwwnnn','*':'nwnnwnwnn'};
+function pinBarcode(pin){
+  const code = '*' + String(pin || '').toUpperCase().replace(/[^0-9A-F]/g, '') + '*';
+  const NS = 'http://www.w3.org/2000/svg', svg = document.createElementNS(NS, 'svg');
+  let x = 0;
+  for (const ch of code) {
+    [...C39[ch]].forEach((w, i) => {
+      const width = w === 'w' ? 3 : 1;
+      if (i % 2 === 0) { const r = document.createElementNS(NS, 'rect'); r.setAttribute('x', x); r.setAttribute('y', 0); r.setAttribute('width', width); r.setAttribute('height', 40); r.setAttribute('fill', '#000'); svg.append(r); }
+      x += width;
+    });
+    x += 1;
+  }
+  svg.setAttribute('viewBox', '0 0 ' + x + ' 40'); svg.setAttribute('preserveAspectRatio', 'none');
+  return svg;
+}
+$('pfBarcodeBtn').addEventListener('click', () => {
+  const box = $('pfBarcode'), pin = $('pfPin').textContent.trim();
+  if (box.hidden) { box.replaceChildren(pinBarcode(pin), el('div', 'bc-txt', pin)); box.hidden = false; $('pfBarcodeBtn').textContent = 'إخفاء'; }
+  else { box.hidden = true; box.replaceChildren(); $('pfBarcodeBtn').textContent = 'إظهار'; }
+});
+
 function renderProfile(){
   const id = profileId, d = dataOf(id) || {}, mine = id === uid;
-  $('pfTitle').textContent = mine ? 'ملفي الشخصي' : 'ملف تعريف جهة الاتصال';
+  $('pfTitle').textContent = mine ? 'ملف التعريف الخاص بي' : 'ملف تعريف جهة الاتصال';
+  $('pfBarcode').hidden = true; $('pfBarcode').replaceChildren(); $('pfBarcodeBtn').textContent = 'إظهار';
   $('pfAvatar').replaceChildren(avatar(id, 'lg'));
   $('pfPinSmall').textContent = d.pin || '';
   $('pfName').textContent = d.name || '';
