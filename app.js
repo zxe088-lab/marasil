@@ -31,9 +31,11 @@ const isBlocked = id => !!blocked[id];
 const ONLINE_MS = 6 * 60 * 1000;
 const GROUP_MS = 5 * 60 * 1000;   // رسائل نفس الشخص خلال 5 دقائق تنجمع في بطاقة وحدة
 
-let auth, fs, uid = null, me = null, tab = 'chats';
+let auth, fs, uid = null, me = null, tab = null;
 const users = {}, userSubs = {};
 let contacts = {}, chats = {}, closedCats = {};
+let incomingRequests = {}, outgoingRequests = {}, groups = {};
+let requestsReadable = true, groupsReadable = true;
 let stack = [], profileId = null;
 let chatId = null, chatPeer = null, unsubMsgs = null, unsubChat = null, curChat = null, msgs = [];
 let firstChatsSnap = true, firstMsgsSnap = true, typingSent = 0, readTimer = null, seenUpdates = 0;
@@ -115,8 +117,8 @@ async function loadTone(name){
   let src = null;
   try { src = localStorage.getItem('marasil-tone-' + name); } catch {}
   if (src) toneOrigin[name] = 'device';
-  else if (IS_NATIVE && name === 'incoming') {
-    src = 'sounds/incoming.mp3'; toneOrigin[name] = 'site';
+  else if (name === 'incoming' || name === 'ping') {
+    src = 'sounds/bbm.mp3'; toneOrigin[name] = 'site';
   } else {
     for (const ext of ['mp3', 'm4a', 'wav', 'ogg']) {
       try {
@@ -223,7 +225,7 @@ document.querySelectorAll('[data-back]').forEach(b => b.addEventListener('click'
 
 function setTab(t){
   tab = t;
-  ['updates','chats','contacts','friends'].forEach(k => $('t-' + k).hidden = k !== t);
+  ['updates','chats','contacts','friends','groups','pending'].forEach(k => $('t-' + k).hidden = k !== t);
   document.querySelectorAll('[data-section]').forEach(b => {
     const active = b.dataset.section === t;
     b.classList.toggle('selected', active);
@@ -396,6 +398,16 @@ function watchUser(id){
 }
 
 function listen(){
+  ['from', 'to'].forEach(field => {
+    fs.collection('contactRequests').where(field, '==', uid).onSnapshot(s => {
+      const items = {}; s.docs.forEach(d => { items[d.id] = d.data(); watchUser(field === 'from' ? d.data().to : d.data().from); });
+      if (field === 'from') outgoingRequests = items; else incomingRequests = items;
+      renderHomeSoon();
+    }, () => { requestsReadable = false; renderHomeSoon(); });
+  });
+  fs.collection('groups').where('members', 'array-contains', uid).onSnapshot(s => {
+    groups = {}; s.docs.forEach(d => groups[d.id] = d.data()); groupsReadable = true; renderHomeSoon();
+  }, () => { groupsReadable = false; renderHomeSoon(); });
   fs.collection('users/' + uid + '/blocked').onSnapshot(s => {
     blocked = {}; s.docs.forEach(d => blocked[d.id] = true);
     renderHomeSoon();
@@ -438,7 +450,10 @@ function renderHome(){
   $('classicChatsCount').textContent = '(' + Object.values(chats).filter(c => c.lastTs && !isBlocked(c.members.find(m => m !== uid)) && !gone[c.members.find(m => m !== uid)]).length + ')';
   $('classicNamesCount').textContent = '(' + contactIds.length + ')';
   $('classicFriendsCount').textContent = '(' + contactIds.filter(id => !isBlocked(id)).length + ')';
-  if (tab === 'chats') renderChats(); else if (tab === 'contacts' || tab === 'friends') renderContacts(); else if (tab === 'updates') renderUpdates();
+  if (tab === 'chats') renderChats(); else if (tab === 'contacts' || tab === 'friends') renderContacts(); else if (tab === 'updates') renderUpdates(); else if (tab === 'pending') renderPending(); else if (tab === 'groups') renderGroups();
+  $('classicUpdatesCount').textContent = '(' + recentUpdates().length + ')';
+  $('classicGroupsCount').textContent = groupsReadable ? '(' + Object.keys(groups).length + ')' : '(—)';
+  $('classicPendingCount').textContent = requestsReadable ? '(' + pendingRequests().length + ')' : '(—)';
   const ups = recentUpdates().filter(id => users[id].updatedAt > seenUpdates).length;
   $('updDot').hidden = !ups || tab === 'updates';
   updateTitle();
@@ -530,6 +545,47 @@ function updateTitle(){
   $('unreadBadge').hidden = !n; $('unreadBadge').textContent = n;
 }
 
+/* ---------- طلبات الإضافة والمجموعات ---------- */
+function pendingRequests(){
+  return Object.entries({ ...outgoingRequests, ...incomingRequests }).filter(([, r]) => r.status === 'pending').sort((a,b) => b[1].createdAt - a[1].createdAt);
+}
+async function respondRequest(id, accept){
+  try {
+    const ref = fs.doc('contactRequests/' + id);
+    if (!accept) { await ref.delete(); return; }
+    await fs.runTransaction(async tx => {
+      const snap = await tx.get(ref), r = snap.data();
+      if (!snap.exists || r.to !== uid || r.status !== 'pending' || isBlocked(r.from)) throw Error('invalid request');
+      tx.update(ref, { status: 'accepted' });
+      tx.set(fs.doc('users/' + uid + '/contacts/' + r.from), { at: Date.now(), cat: DEFAULT_CAT }, { merge: true });
+      tx.set(fs.doc('users/' + r.from + '/contacts/' + uid), { at: Date.now(), cat: r.cat || DEFAULT_CAT }, { merge: true });
+    });
+    toast('تم قبول طلب الإضافة'); play('contact');
+  } catch { toast('تعذر تحديث الطلب. تحقق من الاتصال وقواعد Firebase'); }
+}
+function renderPending(){
+  const list = $('pendingList'); list.replaceChildren();
+  if (!requestsReadable) { list.append(el('div','empty','تعذر قراءة الطلبات. يجب نشر قواعد Firebase الجديدة.')); return; }
+  const entries = pendingRequests();
+  if (!entries.length) { list.append(el('div','empty','لا توجد طلبات إضافة معلّقة')); return; }
+  entries.forEach(([id,r]) => {
+    const sent = r.from === uid, peer = sent ? r.to : r.from;
+    const row = el('div','row request-row'), info = el('span','info');
+    info.append(el('span','nm',nameOf(peer)),el('span','sub',sent ? 'بانتظار قبول الإضافة' : 'طلب إضافة وارد'));
+    const actions = el('span','request-actions');
+    if (!sent && !isBlocked(peer)) { const accept = el('button','btn sm','قبول'); accept.type='button'; accept.onclick=async()=>{accept.disabled=true; await respondRequest(id,true); accept.disabled=false;}; actions.append(accept); }
+    const cancel = el('button','btn sm',sent ? 'إلغاء الطلب' : 'رفض'); cancel.type='button'; cancel.onclick=async()=>{cancel.disabled=true; await respondRequest(id,false); cancel.disabled=false;}; actions.append(cancel);
+    row.append(avatar(peer,'xs'),info,actions); list.append(row);
+  });
+}
+function renderGroups(){
+  const list = $('groupsList'); list.replaceChildren();
+  if (!groupsReadable) { list.append(el('div','empty','تعذر قراءة المجموعات. تحقق من قواعد Firebase.')); return; }
+  const entries = Object.values(groups);
+  if (!entries.length) { list.append(el('div','empty','لا توجد مجموعات BBM')); return; }
+  entries.forEach(g=>{const row=el('div','row'),info=el('span','info'); info.append(el('span','nm',g.name || 'مجموعة BBM'),el('span','sub',(g.members?.length || 0)+' أعضاء'));row.append(info);list.append(row);});
+}
+
 /* ---------- إضافة جهة اتصال ---------- */
 function fillCatSelect(sel, value){
   sel.replaceChildren();
@@ -546,11 +602,14 @@ $('addForm').addEventListener('submit', async e => {
     const p = await fs.doc('pins/' + pin).get();
     if (!p.exists) { toast('ما لقينا أحد بهذا الرمز'); return; }
     const cid = p.data().uid;
-    const b = fs.batch();
-    b.set(fs.doc('users/' + uid + '/contacts/' + cid), { cat: $('addCat').value, at: Date.now() }, { merge: true });
-    b.set(fs.doc('users/' + cid + '/contacts/' + uid), { at: Date.now() }, { merge: true });
-    await b.commit();
-    toast('تمت الإضافة'); play('contact'); show('s-home'); setTab('contacts');
+    if (cid === uid || contacts[cid]) { toast('هذا الشخص مضاف عندك'); return; }
+    if (isBlocked(cid)) { toast('ألغ الحظر قبل إرسال طلب'); return; }
+    const reverse = Object.entries(incomingRequests).find(([, r]) => r.from === cid && r.status === 'pending');
+    if (reverse) { show('s-home'); setTab('pending'); toast('لديك طلب وارد من هذا الشخص'); return; }
+    const existing = Object.values(outgoingRequests).find(r => r.to === cid && r.status === 'pending');
+    if (existing) { toast('الطلب معلّق بالفعل'); return; }
+    await fs.doc('contactRequests/' + uid + '_' + cid).set({ from: uid, to: cid, cat: $('addCat').value, status: 'pending', createdAt: Date.now() });
+    toast('تم إرسال طلب الإضافة'); show('s-home'); setTab('pending');
   } catch (err) { console.error(err); toast('ما قدرنا نضيفه، جرّب مرة ثانية'); }
 });
 

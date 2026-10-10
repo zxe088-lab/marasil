@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.json">
 <title>BPM old</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=10">
+<link rel="stylesheet" href="style.css?v=11">
 </head>
 <body>
 <!-- أيقونات -->
@@ -65,24 +65,13 @@
       <span class="led" id="led" title="رسائل جديدة"></span>
     </button>
 
-    <div class="view" id="t-updates" hidden>
-      <div class="scroll" id="updatesList"></div>
-    </div>
-
-    <button type="button" class="classic-category selected" data-section="chats" aria-expanded="true"><span>دردشات <span id="classicChatsCount">(0)</span></span><span class="category-toggle">−</span></button>
-    <div class="view classic-panel" id="t-chats">
-      <div class="scroll" id="chatList"></div>
-    </div>
-
-    <button type="button" class="classic-category" data-section="contacts" aria-expanded="false"><span>الأسماء <span id="classicNamesCount">(0)</span></span><span class="category-toggle">+</span></button>
-    <div class="view classic-panel" id="t-contacts" hidden>
-      <div class="searchbox"><input id="search" placeholder="بحث في جهات الاتصال" autocomplete="off"></div>
-      <div class="scroll" id="contactList"></div>
-    </div>
-
-    <button type="button" class="classic-category" data-section="friends" aria-expanded="false"><span>الأصدقاء <span id="classicFriendsCount">(0)</span></span><span class="category-toggle">+</span></button>
-    <div class="view classic-panel" id="t-friends" hidden><div class="scroll" id="friendsList"></div></div>
-    <div class="classic-fill"></div>
+    <div class="classic-menu scroll">
+<button type="button" class="classic-category" data-section="chats" aria-expanded="false" aria-controls="t-chats"><span>الرسائل <span id="classicChatsCount">(0)</span></span><span class="category-toggle">+</span></button><div class="classic-panel" id="t-chats" hidden><div class="scroll" id="chatList"></div></div>
+<button type="button" class="classic-category" data-section="updates" aria-expanded="false" aria-controls="t-updates"><span>التحديثات <span id="classicUpdatesCount">(0)</span></span><span class="category-toggle">+</span></button><div class="classic-panel" id="t-updates" hidden><div class="scroll" id="updatesList"></div></div>
+<button type="button" class="classic-category" data-section="contacts" aria-expanded="false" aria-controls="t-contacts"><span>الأسماء <span id="classicNamesCount">(0)</span></span><span class="category-toggle">+</span></button><div class="classic-panel" id="t-contacts" hidden><div class="searchbox"><input id="search" placeholder="بحث في الأسماء" autocomplete="off"></div><div class="scroll" id="contactList"></div></div>
+<button type="button" class="classic-category" data-section="friends" aria-expanded="false" aria-controls="t-friends"><span>الأصدقاء <span id="classicFriendsCount">(0)</span></span><span class="category-toggle">+</span></button><div class="classic-panel" id="t-friends" hidden><div class="scroll" id="friendsList"></div></div>
+<button type="button" class="classic-category" data-section="groups" aria-expanded="false" aria-controls="t-groups"><span>مجموعات BBM <span id="classicGroupsCount">(0)</span></span><span class="category-toggle">+</span></button><div class="classic-panel" id="t-groups" hidden><div class="scroll" id="groupsList"></div></div>
+<button type="button" class="classic-category" data-section="pending" aria-expanded="false" aria-controls="t-pending"><span>المعلّق <span id="classicPendingCount">(0)</span></span><span class="category-toggle">+</span></button><div class="classic-panel" id="t-pending" hidden><div class="scroll" id="pendingList"></div></div><div class="classic-fill"></div></div>
     <nav class="tabbar">
       <button type="button" data-tab="updates"><svg><use href="#i-updates"/></svg><span>التحديثات</span><i class="dotnew" id="updDot" hidden></i></button>
       <button type="button" data-tab="chats" class="on"><svg><use href="#i-chats"/></svg><span>الدردشات</span><i class="cnt" id="unreadBadge" hidden></i></button>
@@ -235,6 +224,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="app.js?v=10"></script>
+<script src="app.js?v=11"></script>
 </body>
 </html>

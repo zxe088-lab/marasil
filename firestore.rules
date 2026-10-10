@@ -34,13 +34,41 @@ service cloud.firestore {
       match /contacts/{contactId} {
         allow read, delete: if signedIn() && request.auth.uid == userId;
         allow create, update: if signedIn()
-          && (request.auth.uid == userId || (request.auth.uid == contactId && !blockedBy(userId)));
+          && (request.auth.uid == userId || (
+            request.auth.uid == contactId && !blockedBy(userId)
+            && get(/databases/$(database)/documents/contactRequests/$(userId + '_' + contactId)).data.status == 'pending'
+            && getAfter(/databases/$(database)/documents/contactRequests/$(userId + '_' + contactId)).data.status == 'accepted'
+            && getAfter(/databases/$(database)/documents/contactRequests/$(userId + '_' + contactId)).data.to == contactId
+          ));
       }
 
       // قائمة الحظر (شرط من آبل)
       match /blocked/{otherId} {
         allow read, write: if signedIn() && request.auth.uid == userId;
       }
+    }
+
+    match /contactRequests/{id} {
+      allow read: if signedIn() && (resource.data.from == request.auth.uid || resource.data.to == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['from','to','cat','status','createdAt'])
+        && request.resource.data.from == request.auth.uid
+        && request.resource.data.to is string && request.resource.data.to != request.auth.uid
+        && id == request.resource.data.from + '_' + request.resource.data.to
+        && request.resource.data.status == 'pending'
+        && request.resource.data.cat is string && request.resource.data.cat.size() <= 100
+        && request.resource.data.createdAt is number
+        && exists(/databases/$(database)/documents/users/$(request.resource.data.to))
+        && !blockedBy(request.resource.data.to);
+      allow update: if signedIn() && resource.data.to == request.auth.uid
+        && resource.data.status == 'pending' && request.resource.data.status == 'accepted'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && !blockedBy(resource.data.from)
+        && !exists(/databases/$(database)/documents/users/$(request.auth.uid)/blocked/$(resource.data.from));
+      allow delete: if signedIn() && (resource.data.from == request.auth.uid || resource.data.to == request.auth.uid);
+    }
+    match /groups/{groupId} {
+      allow read: if signedIn() && request.auth.uid in resource.data.members;
     }
 
     // ---------- رموز PIN ----------
