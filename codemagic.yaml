@@ -62,6 +62,20 @@ workflows:
             || /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string $APP_NAME" "$PLIST"
           /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" "$PLIST" || true
 
+      - name: Restrict app to iPhone
+        script: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p = Path("ios/App/App.xcodeproj/project.pbxproj")
+          s = p.read_text()
+          s, count = re.subn(r'TARGETED_DEVICE_FAMILY\s*=\s*[^;]+;', 'TARGETED_DEVICE_FAMILY = 1;', s)
+          if count == 0:
+              raise SystemExit("No TARGETED_DEVICE_FAMILY settings found")
+          p.write_text(s)
+          print(f"Configured {count} build settings for iPhone only")
+          PY
+
       - name: Code signing
         script: |
           keychain initialize
@@ -86,3 +100,4 @@ workflows:
       app_store_connect:
         auth: integration
         submit_to_testflight: true
+
