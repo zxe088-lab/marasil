@@ -1,6 +1,6 @@
-# بناء تطبيق BPM old للآيفون على GitHub Actions ورفعه لـ TestFlight
+# بناء تطبيق BPB OLD للآيفون على GitHub Actions ورفعه لـ TestFlight
 # بديل لـ codemagic.yaml — نفس الخطوات ونفس أدوات التوقيع (codemagic-cli-tools)
-name: BPM old - iOS (GitHub Actions)
+name: BPB OLD - iOS (GitHub Actions)
 
 on:
   workflow_dispatch:        # تشغيل يدوي فقط من تبويب Actions
@@ -11,7 +11,7 @@ jobs:
     timeout-minutes: 60
     env:
       BUNDLE_ID: com.zxe088.bpmold
-      APP_NAME: BPM old
+      APP_NAME: BPB OLD
       XCODE_WORKSPACE: ios/App/App.xcworkspace
       XCODE_SCHEME: App
       # مفاتيح App Store Connect والشهادة — تُضاف في Settings > Secrets and variables > Actions
