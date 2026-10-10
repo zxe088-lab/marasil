@@ -223,12 +223,19 @@ document.querySelectorAll('[data-back]').forEach(b => b.addEventListener('click'
 
 function setTab(t){
   tab = t;
-  ['updates','chats','contacts'].forEach(k => $('t-' + k).hidden = k !== t);
+  ['updates','chats','contacts','friends'].forEach(k => $('t-' + k).hidden = k !== t);
+  document.querySelectorAll('[data-section]').forEach(b => {
+    const active = b.dataset.section === t;
+    b.classList.toggle('selected', active);
+    b.setAttribute('aria-expanded', String(active));
+    b.querySelector('.category-toggle').textContent = active ? '−' : '+';
+  });
   document.querySelectorAll('.tabbar [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
   if (t === 'updates') { seenUpdates = Date.now(); saveLocal(); }
   renderHome();
 }
 document.querySelectorAll('.tabbar [data-tab]').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
+document.querySelectorAll('[data-section]').forEach(b => b.addEventListener('click', () => setTab(tab === b.dataset.section ? null : b.dataset.section)));
 
 /* ---------- Firebase ---------- */
 function boot(){
@@ -427,7 +434,11 @@ function renderHome(){
   $('meHeadName').textContent = me.name;
   $('meHeadMsg').textContent = me.msg || (me.busy ? 'مشغول' : 'متوفر');
   $('meHeadStatus').className = 'st-icon' + (me.busy ? ' busy' : '');
-  if (tab === 'chats') renderChats(); else if (tab === 'contacts') renderContacts(); else renderUpdates();
+  const contactIds = Object.keys(contacts).filter(id => !gone[id]);
+  $('classicChatsCount').textContent = '(' + Object.values(chats).filter(c => c.lastTs && !isBlocked(c.members.find(m => m !== uid)) && !gone[c.members.find(m => m !== uid)]).length + ')';
+  $('classicNamesCount').textContent = '(' + contactIds.length + ')';
+  $('classicFriendsCount').textContent = '(' + contactIds.filter(id => !isBlocked(id)).length + ')';
+  if (tab === 'chats') renderChats(); else if (tab === 'contacts' || tab === 'friends') renderContacts(); else if (tab === 'updates') renderUpdates();
   const ups = recentUpdates().filter(id => users[id].updatedAt > seenUpdates).length;
   $('updDot').hidden = !ups || tab === 'updates';
   updateTitle();
@@ -453,9 +464,10 @@ function renderChats(){
 }
 
 function renderContacts(){
-  const list = $('contactList'); list.replaceChildren();
-  const q = $('search').value.trim().toLowerCase();
-  const ids = Object.keys(contacts).filter(id => !gone[id]);
+  const friends = tab === 'friends';
+  const list = $(friends ? 'friendsList' : 'contactList'); list.replaceChildren();
+  const q = friends ? '' : $('search').value.trim().toLowerCase();
+  const ids = Object.keys(contacts).filter(id => !gone[id] && (!friends || !isBlocked(id)));
   if (!ids.length) { list.append(el('div', 'empty', 'ما عندك جهات اتصال. اضغط "إضافة" تحت واكتب رمز PIN حق صاحبك.')); return; }
   const cats = [...new Set([...(me.cats || [DEFAULT_CAT]), ...ids.map(id => contacts[id].cat || DEFAULT_CAT)])];
   cats.forEach(cat => {
@@ -471,10 +483,11 @@ function renderContacts(){
     if (!inCat.length) { list.append(el('div', 'empty', 'الفئة فاضية.')); return; }
     const grid = el('div', 'grid');
     inCat.forEach(id => {
-      const t = el('button', 'tile'); t.type = 'button'; t.style.background = colorOf(id);
-      const p = photoOf(id);
-      if (p) { const img = el('img'); img.src = p; img.alt = ''; t.append(img); } else t.append(initialOf(id));
-      const tn = el('span', 'tn'); tn.append(statusIcon(id), el('span', '', nameOf(id))); t.append(tn);
+      const t = el('button', 'row classic-contact'); t.type = 'button';
+      const info = el('span', 'info');
+      const tn = el('span', 'nm'); tn.append(statusIcon(id), el('span', '', nameOf(id)));
+      info.append(tn, el('span', 'sub', users[id]?.msg || (users[id]?.busy ? 'مشغول' : isOnline(id) ? 'متوفر' : 'غير متصل')));
+      t.append(avatar(id, 'xs'), info);
       if (isBlocked(id)) { t.classList.add('blocked'); t.append(el('span', 'tblocked', 'محظور')); }
       else if (users[id]?.busy) t.append(el('span', 'tbusy', '−'));
       t.addEventListener('click', () => openProfile(id));

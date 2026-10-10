@@ -69,15 +69,20 @@
       <div class="scroll" id="updatesList"></div>
     </div>
 
-    <div class="view" id="t-chats">
+    <button type="button" class="classic-category selected" data-section="chats" aria-expanded="true"><span>دردشات <span id="classicChatsCount">(0)</span></span><span class="category-toggle">−</span></button>
+    <div class="view classic-panel" id="t-chats">
       <div class="scroll" id="chatList"></div>
     </div>
 
-    <div class="view" id="t-contacts" hidden>
+    <button type="button" class="classic-category" data-section="contacts" aria-expanded="false"><span>الأسماء <span id="classicNamesCount">(0)</span></span><span class="category-toggle">+</span></button>
+    <div class="view classic-panel" id="t-contacts" hidden>
       <div class="searchbox"><input id="search" placeholder="بحث في جهات الاتصال" autocomplete="off"></div>
       <div class="scroll" id="contactList"></div>
     </div>
 
+    <button type="button" class="classic-category" data-section="friends" aria-expanded="false"><span>الأصدقاء <span id="classicFriendsCount">(0)</span></span><span class="category-toggle">+</span></button>
+    <div class="view classic-panel" id="t-friends" hidden><div class="scroll" id="friendsList"></div></div>
+    <div class="classic-fill"></div>
     <nav class="tabbar">
       <button type="button" data-tab="updates"><svg><use href="#i-updates"/></svg><span>التحديثات</span><i class="dotnew" id="updDot" hidden></i></button>
       <button type="button" data-tab="chats" class="on"><svg><use href="#i-chats"/></svg><span>الدردشات</span><i class="cnt" id="unreadBadge" hidden></i></button>
