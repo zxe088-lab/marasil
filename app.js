@@ -1,4 +1,4 @@
-/* BPM old — تطبيق محادثة على طريقة الماسنجر الكلاسيكي، يعمل على Firebase (الخطة المجانية) */
+/* BPB OLD — تطبيق محادثة على طريقة الماسنجر الكلاسيكي، يعمل على Firebase (الخطة المجانية) */
 'use strict';
 
 const $ = id => document.getElementById(id);
@@ -21,7 +21,7 @@ const COUNTRIES = [
 const EMOJIS = '😊😄😁😂🤣😅😉😍😘🥰😋😜🤪😎🤩🥳😏😌🤔🤨😐😶🙄😴😢😭😤😡🤬😱😳🥺😇🤗🤭🤫👍👎👌✌️🤝🙏👏💪❤️💔💯🔥⭐🎉🌹☕🚗✈️🏕️⚽'.match(/\p{Extended_Pictographic}️?/gu);
 const DEFAULT_CAT = 'جهات الاتصال';
 const OWNER_UID = '7KzlcizFv8TrIeqRVqi6BjNoCue2';   // صاحب التطبيق: الوحيد اللي يقدر يغيّر رمز PIN
-const APP_NAME = 'BPM old';
+const APP_NAME = 'BPB OLD';
 // داخل تطبيق الآيفون (Capacitor): دخول بدون حساب فقط + اهتزاز حقيقي
 const IS_NATIVE = !!window.Capacitor?.isNativePlatform?.();
 const Haptics = IS_NATIVE ? window.Capacitor?.Plugins?.Haptics : null;
