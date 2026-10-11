@@ -81,6 +81,7 @@ let contacts = {}, chats = {}, closedCats = {};
 let incomingRequests = {}, outgoingRequests = {}, groups = {};
 let requestsReadable = true, groupsReadable = true;
 let stack = [], profileId = null;
+let chatGroup = null, lastChat = null;
 let chatId = null, chatPeer = null, unsubMsgs = null, unsubChat = null, curChat = null, msgs = [];
 let firstChatsSnap = true, firstMsgsSnap = true, typingSent = 0, readTimer = null, seenUpdates = 0;
 
@@ -256,12 +257,13 @@ function nudgeEffect(){
 }
 
 /* ---------- التنقل ---------- */
-const SCREENS = ['s-loading','s-error','s-login','s-setup','s-home','s-add','s-menu','s-broadcast','s-profile','s-chat'];
+const SCREENS = ['s-loading','s-error','s-login','s-setup','s-home','s-add','s-menu','s-broadcast','s-group','s-profile','s-chat'];
 function show(id, push = true){
   const cur = SCREENS.find(s => !$(s).hidden);
   if (push && cur && cur !== id && !['s-loading','s-error','s-login','s-setup'].includes(cur)) stack.push(cur);
   SCREENS.forEach(s => $(s).hidden = s !== id);
   if (id !== 's-chat') closeChat();
+  else if (!push && !chatId && lastChat) { const lc = lastChat; setTimeout(() => lc.group ? openGroup(lc.id) : openChat(lc.id)); }
   if (id === 's-home') { stack = []; renderHome(); }
   updateTitle();
 }
@@ -433,7 +435,7 @@ function heartbeat(){
   const beat = () => { if (document.visibilityState === 'visible') fs.doc('users/' + uid).update({ lastSeen: Date.now() }).catch(() => {}); };
   beat(); setInterval(beat, 4 * 60 * 1000);
   document.addEventListener('visibilitychange', () => { beat(); markRead(); updateTitle(); });
-  setInterval(() => { renderHomeSoon(); if (!$('s-profile').hidden) renderProfile(); if (chatPeer) renderChatHead(); }, 30000);
+  setInterval(() => { renderHomeSoon(); if (!$('s-profile').hidden) renderProfile(); if (chatPeer || chatGroup) renderChatHead(); }, 30000);
 }
 
 function watchUser(id){
@@ -456,9 +458,6 @@ function listen(){
       renderHomeSoon();
     }, () => { requestsReadable = false; renderHomeSoon(); });
   });
-  fs.collection('groups').where('members', 'array-contains', uid).onSnapshot(s => {
-    groups = {}; s.docs.forEach(d => groups[d.id] = d.data()); groupsReadable = true; renderHomeSoon();
-  }, () => { groupsReadable = false; renderHomeSoon(); });
   fs.collection('users/' + uid + '/blocked').onSnapshot(s => {
     blocked = {}; s.docs.forEach(d => blocked[d.id] = true);
     renderHomeSoon();
@@ -473,7 +472,7 @@ function listen(){
   fs.collection('chats').where('members', 'array-contains', uid).onSnapshot(s => {
     s.docChanges().forEach(c => {
       const d = c.doc.data(), peer = d.members.find(m => m !== uid);
-      if (peer) watchUser(peer);
+      if (d.isGroup) (d.members || []).forEach(m => m !== uid && watchUser(m)); else if (peer) watchUser(peer);
       if (!firstChatsSnap && c.type !== 'removed' && d.lastFrom && d.lastFrom !== uid && !isBlocked(d.lastFrom) && d.lastTs > (chats[c.doc.id]?.lastTs || 0)) {
         const viewing = c.doc.id === chatId && document.visibilityState === 'visible';
         if (d.lastKind === 'ping') nudgeEffect();
@@ -481,6 +480,7 @@ function listen(){
       }
     });
     chats = {}; s.docs.forEach(d => chats[d.id] = d.data());
+    groups = {}; Object.entries(chats).forEach(([id, c]) => { if (c.isGroup) groups[id] = c; });
     cleanupInactiveChats();
     firstChatsSnap = false;
     renderHomeSoon();
@@ -500,12 +500,12 @@ function renderHome(){
   $('meHeadMsg').textContent = me.msg || statusLabel(me);
   $('meHeadStatus').className = 'st-icon' + (me.busy ? ' busy' : '');
   const contactIds = Object.keys(contacts).filter(id => !gone[id]);
-  $('classicChatsCount').textContent = '(' + Object.values(chats).filter(c => c.lastTs && !isBlocked(c.members.find(m => m !== uid)) && !gone[c.members.find(m => m !== uid)]).length + ')';
+  $('classicChatsCount').textContent = '(' + Object.values(chats).filter(c => c.lastTs && (c.isGroup || (!isBlocked(c.members.find(m => m !== uid)) && !gone[c.members.find(m => m !== uid)]))).length + ')';
   $('classicNamesCount').textContent = '(' + contactIds.length + ')';
   $('classicFriendsCount').textContent = '(' + contactIds.filter(id => !isBlocked(id)).length + ')';
   if (tab === 'chats') renderChats(); else if (tab === 'contacts' || tab === 'friends') renderContacts(); else if (tab === 'updates') renderUpdates(); else if (tab === 'pending') renderPending(); else if (tab === 'groups') renderGroups(); else if (tab && tab.startsWith('cat:')) renderCatPanel(tab);
   $('classicUpdatesCount').textContent = '(' + recentUpdates().length + ')';
-  $('classicGroupsCount').textContent = groupsReadable ? '(' + Object.keys(groups).length + ')' : '(—)';
+  $('classicGroupsCount').textContent = '(' + Object.keys(groups).length + ')';
   $('classicPendingCount').textContent = requestsReadable ? '(' + pendingRequests().length + ')' : '(—)';
   const ups = recentUpdates().filter(id => users[id].updatedAt > seenUpdates).length;
   $('updDot').hidden = !ups || tab === 'updates';
@@ -515,6 +515,7 @@ function renderHome(){
   setSplat('chats', unreadChats > 0);
   setSplat('updates', ups > 0 && tab !== 'updates');
   setSplat('pending', incoming > 0);
+  setSplat('groups', Object.values(groups).some(g => unreadOf(g) && !isBlocked(g.lastFrom)));
   updateTitle();
 }
 function setSplat(section, on){
@@ -526,19 +527,21 @@ function setSplat(section, on){
 
 function renderChats(){
   const list = $('chatList'); list.replaceChildren();
-  const arr = Object.entries(chats).filter(([, c]) => { const p = c.members.find(m => m !== uid); return c.lastTs > Date.now()-MESSAGE_LIFETIME && !isBlocked(p) && !gone[p]; }).sort((a, b) => b[1].lastTs - a[1].lastTs);
+  const arr = Object.entries(chats).filter(([, c]) => { if (c.lastTs <= Date.now()-MESSAGE_LIFETIME) return false; if (c.isGroup) return true; const p = c.members.find(m => m !== uid); return !isBlocked(p) && !gone[p]; }).sort((a, b) => b[1].lastTs - a[1].lastTs);
   if (!arr.length) { list.append(el('div', 'empty', 'ما فيه دردشات. افتح جهات الاتصال واختر أحداً لبدء الدردشة.')); return; }
-  arr.forEach(([, c]) => {
-    const peer = c.members.find(m => m !== uid), un = unreadOf(c);
+  arr.forEach(([id, c]) => {
+    const peer = c.isGroup ? null : c.members.find(m => m !== uid), un = unreadOf(c);
     const row = el('button', 'row' + (un ? ' unread' : '')); row.type = 'button';
     const info = el('span', 'info');
-    const nm = el('span', 'nm'); nm.append(statusIcon(peer), el('span', '', nameOf(peer)));
-    const last = c.lastKind === 'ping' ? 'PING!!!' : (c.lastFrom === uid ? 'أنت: ' : '') + (c.lastKind === 'broadcast' ? '📢 ' : '') + (c.lastMsg || '');
+    const nm = el('span', 'nm');
+    if (c.isGroup) nm.append(el('span', '', c.name || 'مجموعة')); else nm.append(statusIcon(peer), el('span', '', nameOf(peer)));
+    const who = c.lastFrom === uid ? 'أنت: ' : c.isGroup && c.lastFrom && c.lastKind !== 'system' ? nameOf(c.lastFrom) + ': ' : '';
+    const last = c.lastKind === 'ping' ? who + 'PING!!!' : who + (c.lastKind === 'broadcast' ? '📢 ' : '') + (c.lastMsg || '');
     info.append(nm, el('span', 'sub' + (c.lastKind === 'broadcast' ? ' bc' : c.lastKind === 'ping' ? ' ping-preview' : ''), last));
     const side = el('span', 'side'); side.append(el('span', 'when', shortWhen(c.lastTs)));
     if (un) side.append(el('span', 'newpill', 'جديد'));
-    row.append(avatar(peer, 'sm'), info, side);
-    row.addEventListener('click', () => openChat(peer));
+    row.append(c.isGroup ? groupAvatar(id, 'sm') : avatar(peer, 'sm'), info, side);
+    row.addEventListener('click', () => c.isGroup ? openGroup(id) : openChat(peer));
     list.append(row);
   });
 }
@@ -768,10 +771,20 @@ function renderPending(){
 }
 function renderGroups(){
   const list = $('groupsList'); list.replaceChildren();
-  if (!groupsReadable) { list.append(el('div','empty','تعذر قراءة المجموعات. تحقق من قواعد Firebase.')); return; }
-  const entries = Object.values(groups);
-  if (!entries.length) { list.append(el('div','empty','لا توجد مجموعات')); return; }
-  entries.forEach(g=>{const row=el('div','row'),info=el('span','info'); info.append(el('span','nm',g.name || 'مجموعة'),el('span','sub',(g.members?.length || 0)+' أعضاء'));row.append(info);list.append(row);});
+  const add = el('button', 'row group-new'); add.type = 'button';
+  add.append(el('span', 'info', '➕ مجموعة جديدة')); add.addEventListener('click', () => openGroupEditor(null));
+  list.append(add);
+  const entries = Object.entries(groups).sort((a, b) => (b[1].lastTs || 0) - (a[1].lastTs || 0));
+  if (!entries.length) { list.append(el('div', 'empty', 'ما عندك مجموعات. اضغط «مجموعة جديدة» واختر أصدقاءك.')); return; }
+  entries.forEach(([id, g]) => {
+    const un = unreadOf(g), row = el('button', 'row' + (un ? ' unread' : '')); row.type = 'button';
+    const info = el('span', 'info');
+    info.append(el('span', 'nm', g.name || 'مجموعة'), el('span', 'sub', (g.members?.length || 0) + ' أعضاء' + (g.owner === uid ? ' · أنت المالك' : '')));
+    const side = el('span', 'side'); if (g.lastTs) side.append(el('span', 'when', shortWhen(g.lastTs))); if (un) side.append(el('span', 'newpill', 'جديد'));
+    row.append(groupAvatar(id, 'sm'), info, side);
+    row.addEventListener('click', () => openGroup(id));
+    list.append(row);
+  });
 }
 
 /* ---------- إضافة جهة اتصال ---------- */
@@ -997,7 +1010,7 @@ async function openChat(peer){
   try { await fs.doc('chats/' + id).set({ members: [uid, peer].sort() }, { merge: true }); }
   catch (e) { console.error(e); toast('ما قدرنا نفتح الدردشة'); return; }
   show('s-chat');
-  chatId = id; chatPeer = peer; msgs = []; curChat = null; firstMsgsSnap = true;
+  chatId = id; chatPeer = peer; chatGroup = null; lastChat = { id: peer, group: false }; msgs = []; curChat = null; firstMsgsSnap = true;
   watchUser(peer); renderChatHead();
   $('msgList').replaceChildren(el('div', 'empty', 'جاري التحميل…'));
   unsubChat = fs.doc('chats/' + id).onSnapshot(s => { curChat = s.data() || {}; renderMsgs(); renderTyping(); });
@@ -1013,8 +1026,20 @@ async function openChat(peer){
       renderMsgs(true);
     });
 }
-function closeChat(){ cancelVoice(); closeOncePhoto(); clearDraftSticker(); toggleFaces(false); unsubMsgs?.(); unsubChat?.(); unsubMsgs = unsubChat = null; chatId = chatPeer = null; }
+function closeChat(){ chatGroup = null; cancelVoice(); closeOncePhoto(); clearDraftSticker(); toggleFaces(false); unsubMsgs?.(); unsubChat?.(); unsubMsgs = unsubChat = null; chatId = chatPeer = null; }
 function renderChatHead(){
+  if (chatGroup) {
+    const g = curChat || chats[chatGroup] || {}, others = (g.members || []).filter(m => m !== uid);
+    $('chAvatar').replaceChildren(groupAvatar(chatGroup, 'sm'));
+    $('chName').textContent = g.name || 'مجموعة';
+    $('chStatus').className = 'st-icon group';
+    $('chMsg').textContent = others.length ? 'أنت، ' + others.slice(0, 4).map(nameOf).join('، ') + (others.length > 4 ? ' و' + (others.length - 4) + ' غيرهم' : '') : 'أنت فقط';
+    const out = g.members && !g.members.includes(uid);
+    $('composer').hidden = !!out; $('pingBtn').hidden = !!out; $('cameraBtn').hidden = true; updateComposer();
+    $('blockedBar').hidden = true;
+    return;
+  }
+  $('cameraBtn').hidden = false;
   if (!chatPeer) return;
   const d = users[chatPeer] || {};
   $('chAvatar').replaceChildren(avatar(chatPeer, 'sm'));
@@ -1025,14 +1050,15 @@ function renderChatHead(){
   $('composer').hidden = b; $('pingBtn').hidden = b; updateComposer();
   $('blockedBar').hidden = !b;
 }
-$('chInfo').addEventListener('click', () => chatPeer && openProfile(chatPeer));
+$('chInfo').addEventListener('click', () => chatGroup ? openGroupEditor(chatGroup) : chatPeer && openProfile(chatPeer));
 
 function renderMsgs(fromMsgs){
-  if (!chatPeer) return;
+  if (!chatPeer && !chatGroup) return;
   const list = $('msgList'), atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 80;
   list.replaceChildren();
-  if (!msgs.length) { list.append(el('div', 'empty', 'ابدأ الدردشة مع ' + nameOf(chatPeer) + '.')); return; }
-  const peerRead = (curChat?.read || {})[chatPeer] || 0;
+  if (!msgs.length) { list.append(el('div', 'empty', chatGroup ? 'ابدأ الدردشة في «' + ((curChat || {}).name || 'المجموعة') + '».' : 'ابدأ الدردشة مع ' + nameOf(chatPeer) + '.')); return; }
+  const readers = chatGroup ? ((curChat || {}).members || []).filter(m => m !== uid) : [chatPeer];
+  const peerRead = readers.length ? Math.min(...readers.map(r => (curChat?.read || {})[r] || 0)) : 0;
   let lastDay = '', card = null, cardFrom = null, cardTs = 0;
   msgs.forEach(m => {
     if(m.ts <= Date.now()-MESSAGE_LIFETIME) return;
@@ -1094,7 +1120,13 @@ function markRead(){
 }
 
 function renderTyping(){
-  const t = (curChat?.typing || {})[chatPeer] || 0;
+  const typing = curChat?.typing || {};
+  if (chatGroup) {
+    const who = ((curChat || {}).members || []).filter(m => m !== uid && Date.now() - (typing[m] || 0) < 5000);
+    $('typing').textContent = who.length ? who.slice(0, 2).map(nameOf).join('، ') + (who.length > 1 ? ' يكتبون…' : ' يكتب…') : '';
+    return;
+  }
+  const t = typing[chatPeer] || 0;
   $('typing').textContent = chatPeer && Date.now() - t < 5000 ? nameOf(chatPeer) + ' يكتب…' : '';
 }
 setInterval(renderTyping, 1500);
@@ -1468,6 +1500,97 @@ async function rejectJoin(id){
   catch (e) { console.error(e); toast('ما قدرنا نرفض الطلب'); }
 }
 $('joinReqBtn').addEventListener('click', () => { openProfile(uid); setTimeout(() => $('joinReqCard').scrollIntoView({ block: 'start', behavior: 'smooth' }), 80); });
+
+/* ---------- المجموعات ---------- */
+function groupAvatar(id, size = ''){
+  const a = el('div', 'avatar group-av' + (size ? ' ' + size : '')); a.style.background = COLORS[[...String(id)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 0) % COLORS.length];
+  a.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="3.2" fill="#fff"/><circle cx="16.5" cy="9.5" r="2.7" fill="#fff" opacity=".85"/><path d="M2.5 19c.6-3.3 2.9-5 5.5-5s4.9 1.7 5.5 5z" fill="#fff"/><path d="M13.6 14.6c.9-.5 1.9-.8 2.9-.8 2.3 0 4.3 1.5 4.9 4.6h-6.2" fill="#fff" opacity=".85"/></svg>';
+  return a;
+}
+async function openGroup(gid){
+  if (chatId === gid && !$('s-chat').hidden) return;
+  show('s-chat');
+  chatId = gid; chatPeer = null; chatGroup = gid; lastChat = { id: gid, group: true }; msgs = []; curChat = chats[gid] || {}; firstMsgsSnap = true;
+  (curChat.members || []).forEach(m => m !== uid && watchUser(m));
+  renderChatHead();
+  $('msgList').replaceChildren(el('div', 'empty', 'جاري التحميل…'));
+  unsubChat = fs.doc('chats/' + gid).onSnapshot(s => {
+    if (!s.exists) { toast('المجموعة انحذفت'); lastChat = null; show('s-home'); return; }
+    curChat = s.data() || {};
+    if (!(curChat.members || []).includes(uid)) { toast('ما عدت عضو في هذي المجموعة'); lastChat = null; show('s-home'); return; }
+    (curChat.members || []).forEach(m => m !== uid && watchUser(m));
+    renderChatHead(); renderMsgs(); renderTyping();
+  }, () => { toast('ما قدرنا نفتح المجموعة'); lastChat = null; show('s-home'); });
+  cleanExpiredMessages(gid);
+  unsubMsgs = fs.collection('chats/' + gid + '/messages').where('ts','>',Date.now()-MESSAGE_LIFETIME).orderBy('ts', 'desc').limit(30)
+    .onSnapshot({ includeMetadataChanges: true }, s => {
+      msgs = s.docs.map(d => ({ id: d.id, pending: d.metadata.hasPendingWrites, ...d.data() })).reverse();
+      if (!firstMsgsSnap) {
+        const fresh = s.docChanges().filter(c => c.type === 'added' && c.doc.data().from !== uid && !isBlocked(c.doc.data().from));
+        if (fresh.some(c => c.doc.data().kind !== 'ping')) { play('incoming'); buzz(120); }
+      }
+      firstMsgsSnap = false;
+      renderMsgs(true);
+    }, e => console.error(e));
+}
+
+let grEdit = null, grSel = {}, grBusy = false;
+function openGroupEditor(gid){
+  grEdit = gid || null;
+  const g = gid ? (chatGroup === gid && curChat ? curChat : chats[gid]) : null, owner = !g || g.owner === uid;
+  $('grTitle').textContent = !g ? 'مجموعة جديدة' : owner ? 'إدارة المجموعة' : 'معلومات المجموعة';
+  $('grName').value = g?.name || ''; $('grName').disabled = !owner;
+  grSel = {}; (g?.members || []).forEach(m => { if (m !== uid) grSel[m] = true; });
+  $('grSave').hidden = !owner; $('grSave').textContent = g ? 'حفظ التعديلات' : 'إنشاء المجموعة';
+  $('grLeave').hidden = !g || owner; $('grDelete').hidden = !g || !owner;
+  renderGroupMembers(); show('s-group');
+}
+function renderGroupMembers(){
+  const g = grEdit ? chats[grEdit] : null, owner = !g || g.owner === uid, list = $('grList'); list.replaceChildren();
+  const ids = [...new Set([...Object.keys(contacts).filter(id => !gone[id] && !isBlocked(id)), ...(g?.members || []).filter(m => m !== uid)])]
+    .filter(id => owner || (g?.members || []).includes(id)).sort((a, b) => nameOf(a).localeCompare(nameOf(b), 'ar'));
+  const me1 = el('div', 'bc-row'); me1.append(avatar(uid, 'xs'), el('span', 'nm', 'أنت' + ((!g || g.owner === uid) ? ' (المالك)' : '')));
+  list.append(me1);
+  if (!ids.length) list.append(el('div', 'empty', 'أضف أصدقاء أول عشان تقدر تضيفهم للمجموعة.'));
+  ids.forEach(id => {
+    const row = el(owner ? 'label' : 'div', 'bc-row');
+    if (owner) { const cb = el('input'); cb.type = 'checkbox'; cb.checked = !!grSel[id]; cb.addEventListener('change', () => { if (cb.checked) grSel[id] = true; else delete grSel[id]; grCount(); }); row.append(cb); }
+    row.append(avatar(id, 'xs'), el('span', 'nm', nameOf(id) + (g?.owner === id ? ' (المالك)' : '')));
+    list.append(row);
+  });
+  grCount();
+}
+function grCount(){ $('grCount').textContent = '(' + (Object.keys(grSel).length + 1) + ')'; }
+$('grSave').addEventListener('click', async () => {
+  if (grBusy) return;
+  const name = $('grName').value.replace(/\s+/g, ' ').trim(), sel = Object.keys(grSel);
+  if (!name) { toast('اكتب اسم المجموعة'); return; }
+  if (!sel.length) { toast('اختر صديق واحد على الأقل'); return; }
+  if (sel.length > 49) { toast('الحد 50 عضو'); return; }
+  grBusy = true; $('grSave').disabled = true;
+  try {
+    const now = Date.now();
+    if (!grEdit) {
+      const ref = fs.collection('chats').doc();
+      await ref.set({ isGroup: true, name, owner: uid, members: [uid, ...sel], createdAt: now, lastTs: now, lastMsg: 'أُنشئت المجموعة', lastFrom: uid, lastKind: 'system', read: { [uid]: now } });
+      toast('تم إنشاء المجموعة ✅'); show('s-home', false); openGroup(ref.id);
+    } else {
+      await fs.doc('chats/' + grEdit).update({ name, members: [uid, ...sel] });
+      toast('تم حفظ المجموعة'); back();
+    }
+  } catch (e) { console.error(e); toast('ما قدرنا نحفظ المجموعة، تأكد من الاتصال'); }
+  grBusy = false; $('grSave').disabled = false;
+});
+$('grLeave').addEventListener('click', async () => {
+  const ok = await askText('اكتب "مغادرة" لتأكيد الخروج من المجموعة'); if (ok !== 'مغادرة') return;
+  try { await fs.doc('chats/' + grEdit).update({ members: firebase.firestore.FieldValue.arrayRemove(uid) }); lastChat = null; toast('طلعت من المجموعة'); show('s-home'); }
+  catch (e) { console.error(e); toast('ما قدرنا نطلعك من المجموعة'); }
+});
+$('grDelete').addEventListener('click', async () => {
+  const ok = await askText('اكتب "حذف" لتأكيد حذف المجموعة لكل الأعضاء'); if (ok !== 'حذف') return;
+  try { const id = grEdit; lastChat = null; await fs.doc('chats/' + id).delete(); toast('انحذفت المجموعة'); show('s-home'); }
+  catch (e) { console.error(e); toast('ما قدرنا نحذف المجموعة'); }
+});
 
 boot();
 
