@@ -984,7 +984,23 @@ $('randPinBtn').addEventListener('click', async () => {
   toast('جرّب مرة ثانية');
 });
 
-$('pfAvatar').addEventListener('click', () => { if (profileId === uid) $('photoInput').click(); });
+$('pfAvatar').addEventListener('click', () => { if (profileId === uid) $('photoInput').click(); else zoomPhoto(profileId); });
+// تكبير الصورة الشخصية فقط بدون حفظ: تُعرض كخلفية مع طبقة شفافة فوقها
+function zoomPhoto(id){
+  const p = photoOf(id); if (!p) return;
+  let v = $('photoZoom');
+  if (!v) {
+    v = el('div', 'photo-zoom'); v.id = 'photoZoom'; v.setAttribute('role', 'dialog'); v.setAttribute('aria-label', 'الصورة الشخصية');
+    v.append(el('div', 'pz-img'), el('div', 'pz-shield'));
+    v.addEventListener('click', () => { v.hidden = true; v.querySelector('.pz-img').style.backgroundImage = ''; });
+    document.body.append(v);
+  }
+  v.querySelector('.pz-img').style.backgroundImage = 'url("' + String(p).replace(/"/g, '%22') + '")';
+  v.hidden = false;
+}
+$('chAvatar').addEventListener('click', e => { if (chatGroup || !chatPeer || !photoOf(chatPeer)) return; e.stopPropagation(); e.preventDefault(); zoomPhoto(chatPeer); });
+document.addEventListener('contextmenu', e => { if (e.target.closest?.('.avatar, .photo-zoom')) e.preventDefault(); });
+document.addEventListener('dragstart', e => { if (e.target.closest?.('.avatar, .photo-zoom')) e.preventDefault(); });
 $('photoDel').addEventListener('click', () => saveMe({ photo: '' }, 'photo', 'تمت إزالة الصورة'));
 $('photoInput').addEventListener('change', async e => {
   const file = e.target.files?.[0]; e.target.value = '';
@@ -1296,7 +1312,7 @@ function clearDraftSticker(){ draftSticker=null; $('msgInput').replaceChildren()
 function selectSticker(index){
   if ($('composer').hidden) return;
   if(partsText(editorParts()).length>=2000||editorParts().length>=127)return;
-  const face=stickerFace(index);face.dataset.sticker=index;face.contentEditable='false';insertEditorNode(face);
+  const face=stickerFace(index);face.dataset.sticker=index;face.contentEditable='false';insertEditorNode(face);toggleFaces(false);
 }
 function updateComposer(){
   if ($('composer').hidden) { toggleFaces(false); if ($('msgInput').childNodes.length) clearDraftSticker(); cancelVoice(); }
@@ -1348,7 +1364,7 @@ function toggleFaces(open){
   scheduleViewport?.();
 }
 function insertFace(f){
-  if(partsText(editorParts()).length+f.length>2000)return;insertEditorNode(document.createTextNode(f));
+  if(partsText(editorParts()).length+f.length>2000)return;insertEditorNode(document.createTextNode(f));toggleFaces(false);
 }
 document.addEventListener('selectionchange',rememberEditorRange);
 $('msgInput').addEventListener('beforeinput',e=>{
