@@ -553,7 +553,7 @@ $('search').addEventListener('input', renderContacts);
 
 /* ---------- القائمة القابلة للتعديل ---------- */
 const BUILTIN = ['chats', 'updates', 'contacts', 'friends', 'broadcast', 'groups', 'pending'];
-const BUILTIN_LABEL = { chats: 'الدردشات', updates: 'التحديثات', contacts: 'الأسماء', friends: 'الأصدقاء', broadcast: '📢 برودكاست', groups: 'المجموعات', pending: 'المعلّق' };
+const BUILTIN_LABEL = { chats: 'الدردشات', updates: 'التحديثات', contacts: 'الأسماء', friends: 'الأصدقاء', broadcast: '📢 بودكاست', groups: 'المجموعات', pending: 'المعلّق' };
 const userCats = () => (me.cats || [DEFAULT_CAT]).filter(c => c !== DEFAULT_CAT);
 const defaultLabel = k => k.startsWith('cat:') ? k.slice(4) : BUILTIN_LABEL[k];
 function menuCfg(src = me.menu, cats = userCats()){
@@ -1019,7 +1019,7 @@ function renderMsgs(fromMsgs){
     else if (peerRead >= m.ts) { mark = el('span', 'mark r', 'R'); mark.title = 'تمت القراءة'; }
     else { mark = el('span', 'mark d', 'D'); mark.title = 'تم التسليم'; }
     const txt = el('span', 'txt');
-    if (m.broadcast) txt.append(el('span', 'bctag', '📢 برودكاست'));
+    if (m.broadcast) txt.append(el('span', 'bctag', '📢 بودكاست'));
     txt.append(m.text || '');
     line.append(mark, txt);
     card.firstChild.append(line);
@@ -1127,7 +1127,7 @@ $('bcForm').addEventListener('submit', async e => {
   }
   bcBusy = false; $('bcSend').disabled = false; $('bcSend').textContent = '📢 إرسال';
   if (ok) play('sent');
-  if (ok === ids.length) { toast('وصل البرودكاست لـ ' + ok + ' ✅'); show('s-home'); }
+  if (ok === ids.length) { toast('وصل البودكاست لـ ' + ok + ' ✅'); show('s-home'); }
   else toast('وصلت لـ ' + ok + ' من ' + ids.length + '، الباقي ما وصل');
 });
 
