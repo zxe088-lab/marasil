@@ -248,7 +248,7 @@ function nudgeEffect(){
 }
 
 /* ---------- التنقل ---------- */
-const SCREENS = ['s-loading','s-error','s-login','s-setup','s-home','s-add','s-menu','s-profile','s-chat'];
+const SCREENS = ['s-loading','s-error','s-login','s-setup','s-home','s-add','s-menu','s-broadcast','s-profile','s-chat'];
 function show(id, push = true){
   const cur = SCREENS.find(s => !$(s).hidden);
   if (push && cur && cur !== id && !['s-loading','s-error','s-login','s-setup'].includes(cur)) stack.push(cur);
@@ -506,7 +506,7 @@ function renderChats(){
     const row = el('button', 'row' + (un ? ' unread' : '')); row.type = 'button';
     const info = el('span', 'info');
     const nm = el('span', 'nm'); nm.append(statusIcon(peer), el('span', '', nameOf(peer)));
-    const last = c.lastKind === 'ping' ? 'وكزة PING!!!' : (c.lastFrom === uid ? 'أنت: ' : '') + (c.lastMsg || '');
+    const last = c.lastKind === 'ping' ? 'وكزة PING!!!' : (c.lastFrom === uid ? 'أنت: ' : '') + (c.lastKind === 'broadcast' ? '📢 ' : '') + (c.lastMsg || '');
     info.append(nm, el('span', 'sub', last));
     const side = el('span', 'side'); side.append(el('span', 'when', shortWhen(c.lastTs)));
     if (un) side.append(el('span', 'newpill', 'جديد'));
@@ -1017,7 +1017,10 @@ function renderMsgs(fromMsgs){
     else if (m.pending) { mark = el('span', 'mark p'); mark.title = 'جاري الإرسال'; }
     else if (peerRead >= m.ts) { mark = el('span', 'mark r', 'R'); mark.title = 'تمت القراءة'; }
     else { mark = el('span', 'mark d', 'D'); mark.title = 'تم التسليم'; }
-    line.append(mark, el('span', 'txt', m.text || ''));
+    const txt = el('span', 'txt');
+    if (m.broadcast) txt.append(el('span', 'bctag', '📢 رسالة جماعية'));
+    txt.append(m.text || '');
+    line.append(mark, txt);
     card.firstChild.append(line);
   });
   if (atBottom || fromMsgs) list.scrollTop = list.scrollHeight;
@@ -1074,5 +1077,57 @@ $('pingBtn').addEventListener('click', () => {
 
 // الوجوه التعبيرية
 updateComposer();
+
+/* ---------- رسالة جماعية (Broadcast) ---------- */
+let bcSel = {};
+function bcTargets(){ return Object.keys(contacts).filter(id => !gone[id] && !isBlocked(id)).sort((a, b) => nameOf(a).localeCompare(nameOf(b), 'ar')); }
+function renderBroadcast(){
+  const list = $('bcList'), ids = bcTargets(); list.replaceChildren();
+  Object.keys(bcSel).forEach(id => { if (!ids.includes(id)) delete bcSel[id]; });
+  if (!ids.length) list.append(el('div', 'empty', 'ما عندك أصدقاء تراسلهم. أضف أحد برمز PIN أول.'));
+  ids.forEach(id => {
+    const row = el('label', 'bc-row'), cb = el('input');
+    cb.type = 'checkbox'; cb.checked = !!bcSel[id];
+    cb.addEventListener('change', () => { if (cb.checked) bcSel[id] = true; else delete bcSel[id]; bcCount(); });
+    row.append(cb, avatar(id, 'xs'), el('span', 'nm', nameOf(id)));
+    list.append(row);
+  });
+  bcCount();
+}
+function bcCount(){
+  const n = Object.keys(bcSel).length, all = bcTargets().length;
+  $('bcCount').textContent = '(' + n + ')';
+  $('bcAll').textContent = n && n === all ? 'إلغاء التحديد' : 'تحديد الكل';
+}
+$('broadcastBtn').addEventListener('click', () => { bcSel = {}; $('bcText').value = ''; renderBroadcast(); show('s-broadcast'); });
+$('bcAll').addEventListener('click', () => {
+  const ids = bcTargets(), allOn = ids.length && ids.every(id => bcSel[id]);
+  bcSel = {}; if (!allOn) ids.forEach(id => bcSel[id] = true);
+  renderBroadcast();
+});
+let bcBusy = false;
+$('bcForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  if (bcBusy) return;
+  const text = $('bcText').value.trim(), ids = Object.keys(bcSel);
+  if (!text) { toast('اكتب الرسالة أول'); return; }
+  if (!ids.length) { toast('اختر صديق واحد على الأقل'); return; }
+  bcBusy = true; $('bcSend').disabled = true; $('bcSend').textContent = 'جاري الإرسال…';
+  let ok = 0;
+  for (const peer of ids) {
+    const id = chatIdWith(peer), ts = Date.now();
+    try {
+      await fs.doc('chats/' + id).set({ members: [uid, peer].sort() }, { merge: true });
+      const b = fs.batch();
+      b.set(fs.collection('chats/' + id + '/messages').doc(), { from: uid, ts, kind: 'text', text, broadcast: true });
+      b.update(fs.doc('chats/' + id), { lastMsg: text.slice(0, 80), lastTs: ts, lastFrom: uid, lastKind: 'broadcast', ['read.' + uid]: ts });
+      await b.commit(); ok++;
+    } catch (err) { console.error(err); }
+  }
+  bcBusy = false; $('bcSend').disabled = false; $('bcSend').textContent = '📢 إرسال';
+  if (ok) play('sent');
+  if (ok === ids.length) { toast('وصلت الرسالة الجماعية لـ ' + ok + ' ✅'); show('s-home'); }
+  else toast('وصلت لـ ' + ok + ' من ' + ids.length + '، الباقي ما وصل');
+});
 
 boot();
