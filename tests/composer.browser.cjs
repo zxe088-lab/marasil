@@ -10,7 +10,7 @@ const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8')
   .replace(/<link\b[^>]*>/g, '');
 const style = fs.readFileSync(path.join(root, 'style.css'), 'utf8');
 const viewportController = source.slice(source.indexOf('// One layout owner:'), source.indexOf('const COLORS'));
-const composerController = source.slice(source.indexOf('function updateComposer(){'), source.indexOf('\nboot();'));
+const composerController = source.slice(source.indexOf('let draftSticker = null;'), source.indexOf('\nboot();'));
 const setup = `
   const $ = id => document.getElementById(id);
   document.querySelectorAll('#app > .view').forEach(e => e.hidden = e.id !== 's-chat');
@@ -57,7 +57,12 @@ async function frame(page){
     assert.equal(await page.evaluate(() => window.sent[1].text), '🙂');
     assert.equal(await panel.locator('.sticker-button').count(), 48);
     await panel.locator('.sticker-button').first().tap();
-    assert.deepEqual(await page.evaluate(() => window.sent[2]), {kind:'sticker',sticker:0,text:'ملصق بلاك بيري'});
+    assert.equal(await page.evaluate(() => window.sent.length), 2, 'Selecting sticker does not send');
+    assert.equal(await page.locator('#stickerDraft').isVisible(), true);
+    await input.fill('مع الملصق');
+    await input.press('Enter');
+    assert.deepEqual(await page.evaluate(() => window.sent[2]), {kind:'sticker',sticker:0,text:'مع الملصق'});
+    assert.equal(await page.locator('#stickerDraft').isVisible(), false);
     await face.tap();
     assert.equal(await panel.isVisible(), false, 'Face button closes faces');
     assert.equal(await page.locator('#pingBtn').isVisible(), true, 'Ping is retained');
