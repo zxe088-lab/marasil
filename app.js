@@ -57,7 +57,9 @@ const COUNTRIES = [
   ['PS','فلسطين'],['SD','السودان'],['LY','ليبيا'],['TN','تونس'],['DZ','الجزائر'],['MA','المغرب'],['','أخرى']
 ];
 const DEFAULT_CAT = 'جهات الاتصال';
-const OWNER_UID = '7KzlcizFv8TrIeqRVqi6BjNoCue2';   // صاحب التطبيق: الوحيد اللي يقدر يغيّر رمز PIN
+// حسابات صاحب التطبيق (الموقع + تطبيق الآيفون): هم بس اللي يقدرون يغيّرون رمز PIN
+const OWNER_UIDS = ['7KzlcizFv8TrIeqRVqi6BjNoCue2', 'c5yYZKI92rXqwr0cb1gm2HNKdSy2'];
+const isOwner = id => OWNER_UIDS.includes(id);
 const APP_NAME = 'BPB OLD';
 // داخل تطبيق الآيفون (Capacitor): دخول بدون حساب فقط + اهتزاز حقيقي
 const IS_NATIVE = !!window.Capacitor?.isNativePlatform?.();
@@ -339,6 +341,7 @@ async function signOutNow(){
 }
 function renderAccount(){
   const u = auth?.currentUser; if (!u) return;
+  $('accId').textContent = u.uid;
   if (IS_NATIVE) {
     $('accState').textContent = 'حسابك محفوظ في هذا الجهاز. إذا حذفت التطبيق بيضيع الحساب.';
     $('linkGoogleBtn').hidden = true; $('signOutBtn').hidden = true;
@@ -400,7 +403,7 @@ function start(id){
     if (!had) {
       show('s-home', false); listen(); heartbeat();
       // ميزة تغيير الرمز لصاحب التطبيق فقط (مسجّل في مجموعة admins)
-      $('pinAdminCard').hidden = uid !== OWNER_UID;
+      $('pinAdminCard').hidden = !isOwner(uid);
     }
     renderHomeSoon(); if (profileId === uid && !$('s-profile').hidden) renderProfile();
   }, err => { $('errText').textContent = 'ما عندك صلاحية. تأكد من نسخ قواعد الأمان (firestore.rules) في Firebase.'; show('s-error'); console.error(err); });
@@ -1365,6 +1368,8 @@ $('bcForm').addEventListener('submit', async e => {
   if (ok === ids.length) { toast('وصل البودكاست لـ ' + ok + ' ✅'); show('s-home'); }
   else toast('وصلت لـ ' + ok + ' من ' + ids.length + '، الباقي ما وصل');
 });
+
+$('accIdCopy').addEventListener('click', async () => { const t = $('accId').textContent; try { await navigator.clipboard.writeText(t); toast('تم نسخ معرّف الحساب'); } catch { toast(t); } });
 
 boot();
 
