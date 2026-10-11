@@ -241,10 +241,8 @@ const buzz = pattern => {
     navigator.vibrate?.(pattern);
   } catch {}
 };
-function shake(){ const a = $('app'); a.classList.remove('shake'); void a.offsetWidth; a.classList.add('shake'); }
 function nudgeEffect(){
-  play('ping'); buzz([400, 100, 400, 100, 400, 100, 800]); shake(); setTimeout(shake, 600);
-  try { Haptics?.notification({ type: 'WARNING' }); } catch {}
+  buzz([400, 100, 400, 100, 400, 100, 800]);
 }
 
 /* ---------- التنقل ---------- */
@@ -506,8 +504,8 @@ function renderChats(){
     const row = el('button', 'row' + (un ? ' unread' : '')); row.type = 'button';
     const info = el('span', 'info');
     const nm = el('span', 'nm'); nm.append(statusIcon(peer), el('span', '', nameOf(peer)));
-    const last = c.lastKind === 'ping' ? 'وكزة PING!!!' : (c.lastFrom === uid ? 'أنت: ' : '') + (c.lastKind === 'broadcast' ? '📢 ' : '') + (c.lastMsg || '');
-    info.append(nm, el('span', 'sub' + (c.lastKind === 'broadcast' ? ' bc' : ''), last));
+    const last = c.lastKind === 'ping' ? 'PING!!!' : (c.lastFrom === uid ? 'أنت: ' : '') + (c.lastKind === 'broadcast' ? '📢 ' : '') + (c.lastMsg || '');
+    info.append(nm, el('span', 'sub' + (c.lastKind === 'broadcast' ? ' bc' : c.lastKind === 'ping' ? ' ping-preview' : ''), last));
     const side = el('span', 'side'); side.append(el('span', 'when', shortWhen(c.lastTs)));
     if (un) side.append(el('span', 'newpill', 'جديد'));
     row.append(avatar(peer, 'sm'), info, side);
@@ -1012,7 +1010,7 @@ function renderMsgs(fromMsgs){
     const mine = m.from === uid;
     if (m.kind === 'ping') {
       const p = el('div', 'pingcard');
-      p.append(mine ? 'وكزت ' : 'وكزك ', el('bdi', '', nameOf(mine ? chatPeer : m.from)), ' ', el('span', 'pw', 'PING!!!'), el('span', 't', fmtTime(m.ts)));
+      p.append(el('span', 'pw', 'PING!!!'));
       list.append(p); card = null; return;
     }
     if (!card || cardFrom !== m.from || m.ts - cardTs > GROUP_MS) {
@@ -1065,7 +1063,7 @@ async function sendMsg(data){
   const b = fs.batch();
   b.set(fs.collection('chats/' + id + '/messages').doc(), { from: uid, ts, kind: 'text', ...data });
   b.update(fs.doc('chats/' + id), { lastMsg: data.kind === 'ping' ? 'PING!!!' : data.kind === 'sticker' ? 'ملصق بلاك بيري' : (data.text || '').slice(0, 80), lastTs: ts, lastFrom: uid, lastKind: data.kind || 'text', ['read.' + uid]: ts, ['typing.' + uid]: 0 });
-  try { await b.commit(); if (data.kind === 'ping') { play('ping'); shake(); } else play('sent'); }
+  try { await b.commit(); if (data.kind === 'ping') nudgeEffect(); else play('sent'); }
   catch (e) { console.error(e); toast('ما وصلت الرسالة، تأكد من الاتصال'); }
 }
 let draftSticker = null;
