@@ -13,7 +13,7 @@
 <link rel="manifest" href="manifest.json">
 <title>BPB OLD</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=20">
+<link rel="stylesheet" href="style.css?v=21">
 </head>
 <body>
 <!-- أيقونات -->
@@ -137,7 +137,7 @@
     <div class="scroll graybg">
       <div class="card">
         <div class="pf-top">
-          <div class="pf-photo"><span id="pfAvatar"></span><span class="pf-pin pin" id="pfPinSmall"></span><button type="button" class="linkbtn danger mine-only" id="photoDel">إزالة</button><input type="file" id="photoInput" accept="image/*" hidden></div>
+          <div class="pf-photo"><span id="pfAvatar"></span><span class="pf-pin pin" id="pfPinSmall"></span><input type="file" id="photoInput" accept="image/*" hidden></div>
           <div class="pf-fields"><div class="lbl">اسم العرض:</div><div class="box" id="pfName"></div></div>
         </div>
         <div class="kv spread"><span class="lbl">رمز PIN:</span><span class="pin val" id="pfPin"></span></div>
@@ -182,6 +182,7 @@
           <div class="lbl">الحساب</div>
           <div class="hint" id="accState"></div>
           <button type="button" class="btn primary" id="linkGoogleBtn">ربط حسابي بقوقل</button>
+          <button type="button" class="btn" id="photoDel">إزالة صورة العرض</button>
           <button type="button" class="btn danger" id="signOutBtn">تسجيل خروج</button>
           <button type="button" class="btn danger" id="deleteAccBtn">حذف الحساب</button>
           <div class="links">
