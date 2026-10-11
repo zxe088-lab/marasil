@@ -1110,7 +1110,7 @@ function renderMsgs(fromMsgs){
     else if (peerRead >= m.ts) { mark = el('span', 'mark r', 'R'); mark.title = 'تمت القراءة'; }
     else { mark = el('span', 'mark d', 'D'); mark.title = 'تم التسليم'; }
     const txt = el('span', 'txt');
-    if (m.broadcast) txt.append(el('span', 'bctag', '📢 بودكاست'));
+    if (m.broadcast) txt.append(el('span', 'bctag', '📢'));
     if(m.kind === 'richtext' && Array.isArray(m.parts)) {
       for(const part of m.parts.slice(0,128)){
         if(typeof part.text==='string') txt.append(document.createTextNode(part.text));
