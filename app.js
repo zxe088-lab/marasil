@@ -985,7 +985,7 @@ async function openChat(peer){
       renderMsgs(true);
     });
 }
-function closeChat(){ unsubMsgs?.(); unsubChat?.(); unsubMsgs = unsubChat = null; chatId = chatPeer = null; }
+function closeChat(){ toggleFaces(false); unsubMsgs?.(); unsubChat?.(); unsubMsgs = unsubChat = null; chatId = chatPeer = null; }
 function renderChatHead(){
   if (!chatPeer) return;
   const d = users[chatPeer] || {};
@@ -1064,7 +1064,7 @@ async function sendMsg(data){
   catch (e) { console.error(e); toast('ما وصلت الرسالة، تأكد من الاتصال'); }
 }
 function updateComposer(){
-  $('sendBtn').hidden = $('composer').hidden || !$('msgInput').value.trim();
+  if ($('composer').hidden) toggleFaces(false);
 }
 function sendText(){
   const input = $('msgInput');
@@ -1073,8 +1073,30 @@ function sendText(){
   input.focus({ preventScroll: true });
 }
 $('composer').addEventListener('submit', e => { e.preventDefault(); sendText(); });
-// A tap sends through the form once and keeps iOS from blurring the input.
-$('sendBtn').addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') e.preventDefault(); });
+// الوجوه: زر الوجه مكان زر الإرسال، والإرسال من زر "إرسال" في الكيبورد
+const FACES = ['🙂','😃','😁','😂','😉','😊','😍','😘','😜','😛','😎','😇','😏','😮','😳','😢','😭','😡','😤','😴','🤔','🙄','😬','🤐','🤗','🤭','😷','🤒','👍','👎','👏','🙏','💪','👌','✌️','👋','❤️','💔','💜','💙','🌹','⭐','🔥','🎉','🎂','☕','🍀','🌙'];
+function toggleFaces(open){
+  const p = $('facePanel'); if (!p) return;
+  if (open == null) open = p.hidden;
+  if (open && !p.childElementCount) FACES.forEach(f => {
+    const b = el('button', 'face', f); b.type = 'button'; b.setAttribute('aria-label', f);
+    b.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') e.preventDefault(); });
+    b.addEventListener('click', () => insertFace(f));
+    p.append(b);
+  });
+  p.hidden = !open; $('faceBtn').setAttribute('aria-expanded', String(open));
+  scheduleViewport?.();
+}
+function insertFace(f){
+  const input = $('msgInput'), v = input.value;
+  const a = input.selectionStart ?? v.length, b = input.selectionEnd ?? v.length;
+  if ((v.length - (b - a) + f.length) > input.maxLength) return;
+  input.value = v.slice(0, a) + f + v.slice(b);
+  const pos = a + f.length; try { input.setSelectionRange(pos, pos); } catch {}
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+$('faceBtn').addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') e.preventDefault(); });
+$('faceBtn').addEventListener('click', () => toggleFaces());
 $('msgInput').addEventListener('input', () => {
   updateComposer();
   if (!chatId || Date.now() - typingSent < 3000) return;

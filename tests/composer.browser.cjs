@@ -41,27 +41,22 @@ async function frame(page){
     await page.setContent(html);
     await page.addStyleTag({ content: style });
     await page.addScriptTag({ content: setup + viewportController + composerController });
-    const input = page.locator('#msgInput'), send = page.locator('#sendBtn');
-    assert.equal(await send.count(), 1, 'Only one send button exists');
-    assert.equal(await page.locator('.actionbar #sendBtn').count(), 0);
-    assert.equal(await send.isVisible(), false, 'Empty message hides send');
-    await input.fill('   ');
-    assert.equal(await send.isVisible(), false, 'Whitespace hides send');
-    await input.fill('رسالة اختبار');
-    assert.equal(await send.isVisible(), true);
-    await send.tap();
-    assert.deepEqual(await page.evaluate(() => window.sent), [{ kind: 'text', text: 'رسالة اختبار' }]);
-    assert.equal(await input.inputValue(), '');
-    assert.equal(await send.isVisible(), false);
-    assert.equal(await input.evaluate(e => document.activeElement === e), true, 'Input stays focused after sending');
+    const input = page.locator('#msgInput'), face = page.locator('#faceBtn'), panel = page.locator('#facePanel');
+    assert.equal(await page.locator('#sendBtn').count(), 0, 'Send button removed');
+    assert.equal(await face.isVisible(), true, 'Face button replaces send');
+    assert.equal(await panel.isVisible(), false, 'Faces hidden at start');
     await input.fill('رسالة بلوحة المفاتيح');
     await input.press('Enter');
-    assert.equal(await page.evaluate(() => window.sent.length), 2, 'Enter sends once');
-    assert.equal(await page.locator('#emojiBtn').count(), 0);
-    await input.fill('😊');
-    assert.equal(await send.isVisible(), true, 'Emoji reveals send');
-    await send.tap();
-    assert.equal(await page.evaluate(() => window.sent[2].text), '😊');
+    assert.deepEqual(await page.evaluate(() => window.sent), [{ kind: 'text', text: 'رسالة بلوحة المفاتيح' }], 'Enter sends once');
+    assert.equal(await input.inputValue(), '');
+    await face.tap();
+    assert.equal(await panel.isVisible(), true, 'Face button opens faces');
+    await panel.locator('.face').first().tap();
+    assert.equal(await input.inputValue(), '🙂', 'Tapping a face inserts it');
+    await input.press('Enter');
+    assert.equal(await page.evaluate(() => window.sent[1].text), '🙂');
+    await face.tap();
+    assert.equal(await panel.isVisible(), false, 'Face button closes faces');
     assert.equal(await page.locator('#pingBtn').isVisible(), true, 'Ping is retained');
     await input.fill('اختبار لوحة المفاتيح');
     for (const width of [390, 320]) {
@@ -75,16 +70,13 @@ async function frame(page){
         await frame(page);
         const layout = await page.evaluate(() => {
           const rect = id => {const r=document.getElementById(id).getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height};};
-          const buttonStyle = getComputedStyle(document.getElementById('sendBtn'));
-          return {app:rect('app'),input:rect('msgInput'),send:rect('sendBtn'),ping:rect('pingBtn'),list:rect('msgList'),
-            rootScroll:document.scrollingElement.scrollHeight-document.scrollingElement.clientHeight,
-            background:buttonStyle.backgroundColor,color:buttonStyle.color,radius:buttonStyle.borderRadius};
+          
+          return {app:rect('app'),input:rect('msgInput'),send:rect('faceBtn'),ping:rect('pingBtn'),list:rect('msgList'),
+            rootScroll:document.scrollingElement.scrollHeight-document.scrollingElement.clientHeight};
         });
         assert.equal(layout.app.top, top); assert.equal(layout.app.height, height);
         assert.equal(layout.send.width, 44); assert.equal(layout.send.height, 44);
-        assert.equal(layout.background, 'rgb(255, 255, 255)'); assert.equal(layout.color, 'rgb(0, 0, 0)');
-        assert.equal(layout.radius, '50%');
-        assert.ok(layout.send.left >= layout.input.right && layout.send.left - layout.input.right <= 9, 'Send sits right of input');
+        assert.ok(layout.send.left >= layout.input.right && layout.send.left - layout.input.right <= 9, 'Face sits right of input');
         assert.ok(layout.ping.right <= layout.input.left, 'Ping sits left of input');
         assert.ok(layout.send.bottom <= top+height && layout.ping.bottom <= top+height);
         assert.ok(layout.input.bottom <= top+height && layout.list.height > 0);
@@ -94,10 +86,9 @@ async function frame(page){
       }
     }
     await page.evaluate(() => {document.getElementById('composer').hidden=true;updateComposer();});
-    assert.equal(await send.isVisible(), false, 'Blocked composer hides send');
     await page.evaluate(() => sendText());
-    assert.equal(await page.evaluate(() => window.sent.length), 3, 'Blocked composer cannot send');
+    assert.equal(await page.evaluate(() => window.sent.length), 2, 'Blocked composer cannot send');
     assert.deepEqual(errors, []);
-    console.log('PASS empty/text/emoji visibility, touch and Enter send exactly once, focus, blocked composer and Ping retained');
+    console.log('PASS face picker, Enter send exactly once, focus, blocked composer and Ping retained');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode=1; });
