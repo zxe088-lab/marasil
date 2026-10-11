@@ -552,8 +552,8 @@ function renderContacts(){
 $('search').addEventListener('input', renderContacts);
 
 /* ---------- القائمة القابلة للتعديل ---------- */
-const BUILTIN = ['chats', 'updates', 'contacts', 'friends', 'groups', 'pending'];
-const BUILTIN_LABEL = { chats: 'الدردشات', updates: 'التحديثات', contacts: 'الأسماء', friends: 'الأصدقاء', groups: 'المجموعات', pending: 'المعلّق' };
+const BUILTIN = ['chats', 'updates', 'contacts', 'friends', 'broadcast', 'groups', 'pending'];
+const BUILTIN_LABEL = { chats: 'الدردشات', updates: 'التحديثات', contacts: 'الأسماء', friends: 'الأصدقاء', broadcast: '📢 برودكاست', groups: 'المجموعات', pending: 'المعلّق' };
 const userCats = () => (me.cats || [DEFAULT_CAT]).filter(c => c !== DEFAULT_CAT);
 const defaultLabel = k => k.startsWith('cat:') ? k.slice(4) : BUILTIN_LABEL[k];
 function menuCfg(src = me.menu, cats = userCats()){
@@ -561,7 +561,7 @@ function menuCfg(src = me.menu, cats = userCats()){
   const order = (m.order || []).filter(k => all.includes(k));
   all.forEach(k => {
     if (order.includes(k)) return;
-    const at = k.startsWith('cat:') ? order.indexOf('contacts') : -1;
+    const at = k.startsWith('cat:') ? order.indexOf('contacts') : k === 'broadcast' && order.includes('friends') ? order.indexOf('friends') + 1 : -1;
     at >= 0 ? order.splice(at, 0, k) : order.push(k);
   });
   return { order, labels: { ...(m.labels || {}) }, hidden: (m.hidden || []).filter(k => all.includes(k)) };
@@ -586,6 +586,7 @@ function buildMenu(){
   Object.keys(catDom).forEach(k => { if (!cfg.order.includes(k)) { catDom[k].btn.remove(); catDom[k].panel.remove(); delete catDom[k]; } });
   cfg.order.forEach(k => {
     let btn, panel;
+    if (k === 'broadcast') { btn = $('broadcastBtn'); btn.querySelector('.cl').textContent = labelOf(k, cfg); btn.hidden = cfg.hidden.includes(k); menu.insertBefore(btn, tail); return; }
     if (k.startsWith('cat:')) ({ btn, panel } = catSection(k));
     else { btn = menu.querySelector('[data-section="' + k + '"]'); panel = document.getElementById(btn.getAttribute('aria-controls')); }
     btn.querySelector('.cl').textContent = labelOf(k, cfg);
@@ -1018,7 +1019,7 @@ function renderMsgs(fromMsgs){
     else if (peerRead >= m.ts) { mark = el('span', 'mark r', 'R'); mark.title = 'تمت القراءة'; }
     else { mark = el('span', 'mark d', 'D'); mark.title = 'تم التسليم'; }
     const txt = el('span', 'txt');
-    if (m.broadcast) txt.append(el('span', 'bctag', '📢 رسالة جماعية'));
+    if (m.broadcast) txt.append(el('span', 'bctag', '📢 برودكاست'));
     txt.append(m.text || '');
     line.append(mark, txt);
     card.firstChild.append(line);
@@ -1099,7 +1100,7 @@ function bcCount(){
   $('bcCount').textContent = '(' + n + ')';
   $('bcAll').textContent = n && n === all ? 'إلغاء التحديد' : 'تحديد الكل';
 }
-$('broadcastBtn').addEventListener('click', () => { bcSel = {}; $('bcText').value = ''; renderBroadcast(); show('s-broadcast'); });
+$('broadcastBtn').addEventListener('click', () => { $('bcTitle').textContent = labelOf('broadcast'); bcSel = {}; $('bcText').value = ''; renderBroadcast(); show('s-broadcast'); });
 $('bcAll').addEventListener('click', () => {
   const ids = bcTargets(), allOn = ids.length && ids.every(id => bcSel[id]);
   bcSel = {}; if (!allOn) ids.forEach(id => bcSel[id] = true);
@@ -1126,7 +1127,7 @@ $('bcForm').addEventListener('submit', async e => {
   }
   bcBusy = false; $('bcSend').disabled = false; $('bcSend').textContent = '📢 إرسال';
   if (ok) play('sent');
-  if (ok === ids.length) { toast('وصلت الرسالة الجماعية لـ ' + ok + ' ✅'); show('s-home'); }
+  if (ok === ids.length) { toast('وصل البرودكاست لـ ' + ok + ' ✅'); show('s-home'); }
   else toast('وصلت لـ ' + ok + ' من ' + ids.length + '، الباقي ما وصل');
 });
 
