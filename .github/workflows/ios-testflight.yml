@@ -39,6 +39,7 @@ jobs:
           node --test tests/viewport.test.cjs
           rm -rf www && mkdir -p www
           cp index.html app.js style.css firebase-config.js manifest.json icon-192.png icon-512.png www/
+          cp blackberry-48.png www/
           for f in privacy.html terms.html; do [ -f "$f" ] && cp "$f" www/; done
           cp -R fonts www/fonts
           # sounds/bbm.mp3 is for the website only, not bundled in the App Store build
@@ -76,10 +77,13 @@ jobs:
       - name: App settings
         run: |
           PLIST=ios/App/App/Info.plist
-          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString 1.1.0" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString 1.2.0" "$PLIST"
           /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName $APP_NAME" "$PLIST" \
             || /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string $APP_NAME" "$PLIST"
           /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" "$PLIST" || true
+          /usr/libexec/PlistBuddy -c "Add :NSMicrophoneUsageDescription string نحتاج المايك لتسجيل رسالة صوتية تختار إرسالها" "$PLIST" || true
+          /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string نحتاج الكاميرا لالتقاط صورة تُعرض مرة واحدة" "$PLIST" || true
+          /usr/libexec/PlistBuddy -c "Add :NSPhotoLibraryUsageDescription string اختر صورة لإرسالها لمرة واحدة" "$PLIST" || true
 
       - name: Restrict app to iPhone
         run: |
