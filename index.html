@@ -13,7 +13,7 @@
 <link rel="manifest" href="manifest.json">
 <title>BPB OLD</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=28">
+<link rel="stylesheet" href="style.css?v=29">
 </head>
 <body>
 <!-- أيقونات -->
@@ -30,6 +30,7 @@
 </svg>
 
 <div id="app">
+<span class="led" id="led" title="رسائل جديدة" aria-hidden="true"></span>
 
   <section id="s-loading" class="screen"><p>جاري الاتصال…</p></section>
 
@@ -66,7 +67,6 @@
         <span class="bb-name"><span class="st-icon" id="meHeadStatus"></span><span id="meHeadName"></span></span>
         <span class="bb-msg" id="meHeadMsg"></span>
       </span>
-      <span class="led" id="led" title="رسائل جديدة"></span>
     </button>
 
     <div class="classic-menu scroll">
@@ -288,7 +288,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="app.js?v=28"></script>
+<script src="app.js?v=29"></script>
 </body>
 </html>
 
