@@ -116,6 +116,10 @@ main>*{flex-shrink:0}
 form.composer{display:flex;gap:8px;align-items:center;padding:8px 10px;background:linear-gradient(#3a3f43,var(--dark1))}
 form.composer input{flex:1;border-radius:2px;border:1px solid #111;font-style:italic}
 form.composer input:not(:placeholder-shown){font-style:normal}
+.composer-send{flex:0 0 44px;width:44px;height:44px;padding:0;border:0;border-radius:50%;background:#fff;color:#000;display:grid;place-items:center;touch-action:manipulation}
+.composer-send svg{width:24px;height:24px}
+.composer-send:active{background:#e8e8e8}
+.composer-send:focus-visible{outline:2px solid var(--blue1);outline-offset:2px}
 .smile{border:0;background:transparent;padding:0}
 .smile svg{width:32px;height:32px}
 .emojis{display:grid;grid-template-columns:repeat(8,1fr);gap:2px;padding:8px;background:var(--dark1);max-height:200px;overflow-y:auto}

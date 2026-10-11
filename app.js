@@ -984,7 +984,7 @@ function renderChatHead(){
   $('chStatus').className = 'st-icon' + (d.busy ? ' busy' : isOnline(chatPeer) ? '' : ' off');
   $('chMsg').textContent = d.msg || statusText(chatPeer);
   const b = isBlocked(chatPeer);
-  $('composer').hidden = b; $('pingBtn').hidden = b; $('sendBtn').hidden = b; if (b) $('emojiPanel').hidden = true;
+  $('composer').hidden = b; $('pingBtn').hidden = b; updateComposer(); if (b) $('emojiPanel').hidden = true;
   $('blockedBar').hidden = !b;
 }
 $('chInfo').addEventListener('click', () => chatPeer && openProfile(chatPeer));
@@ -1050,13 +1050,20 @@ async function sendMsg(data){
   try { await b.commit(); if (data.kind === 'ping') { play('ping'); shake(); } else play('sent'); }
   catch (e) { console.error(e); toast('ما وصلت الرسالة، تأكد من الاتصال'); }
 }
+function updateComposer(){
+  $('sendBtn').hidden = $('composer').hidden || !$('msgInput').value.trim();
+}
 function sendText(){
-  const text = $('msgInput').value.trim(); if (!text) return;
-  $('msgInput').value = ''; sendMsg({ kind: 'text', text });
+  const input = $('msgInput');
+  const text = input.value.trim(); if (!text || $('composer').hidden) return;
+  input.value = ''; updateComposer(); sendMsg({ kind: 'text', text });
+  input.focus({ preventScroll: true });
 }
 $('composer').addEventListener('submit', e => { e.preventDefault(); sendText(); });
-$('sendBtn').addEventListener('click', sendText);
+// A tap sends through the form once and keeps iOS from blurring the input.
+$('sendBtn').addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') e.preventDefault(); });
 $('msgInput').addEventListener('input', () => {
+  updateComposer();
   if (!chatId || Date.now() - typingSent < 3000) return;
   typingSent = Date.now();
   fs.doc('chats/' + chatId).update({ ['typing.' + uid]: typingSent }).catch(() => {});
@@ -1068,7 +1075,8 @@ $('pingBtn').addEventListener('click', () => {
 });
 
 // الوجوه التعبيرية
-EMOJIS.forEach(e => { const b = el('button', '', e); b.type = 'button'; b.addEventListener('click', () => { const i = $('msgInput'); i.value += e; i.focus(); }); $('emojiPanel').append(b); });
+EMOJIS.forEach(e => { const b = el('button', '', e); b.type = 'button'; b.addEventListener('click', () => { const i = $('msgInput'); i.value += e; updateComposer(); i.focus({ preventScroll: true }); }); $('emojiPanel').append(b); });
 $('emojiBtn').addEventListener('click', () => { $('emojiPanel').hidden = !$('emojiPanel').hidden; const l = $('msgList'); l.scrollTop = l.scrollHeight; });
+updateComposer();
 
 boot();

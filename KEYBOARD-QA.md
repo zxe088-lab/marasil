@@ -1,9 +1,20 @@
 # iOS keyboard review
 
-This branch does not change the marketing version or publish to Apple. The
-Codemagic workflow produces a signed artifact only; its Apple publishing section
-is removed pending explicit approval. Do not merge or start an Apple upload until
-the owner has approved the device results and the release plan.
+This branch does not change the marketing version. The owner approved an internal
+TestFlight upload, with no App Store submission or replacement of the build under
+review. Complete browser checks before starting the next iOS build. Codemagic is
+restricted to this fix branch and exports for internal TestFlight testing only.
+
+The send control is now one 44px white circle with a black arrow inside the
+composer. It appears for non-whitespace text or an emoji, sends via form submission
+once, clears/hides afterward and refocuses the field without scrolling. The old
+actionbar send button is removed; Ping stays in the actionbar. Blocked chats cannot
+use the composer. Keyboard/safe-area behavior continues to use the viewport fix.
+
+The manual `Composer browser checks` workflow runs controller and isolated
+Chromium integration tests, then saves screenshots as `composer-browser-preview`.
+The browser fixture uses production markup/styles/composer controller with a
+local fake send function, so no Firebase account or real messages are used.
 
 ## Design
 
