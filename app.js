@@ -509,7 +509,19 @@ function renderHome(){
   $('classicPendingCount').textContent = requestsReadable ? '(' + pendingRequests().length + ')' : '(—)';
   const ups = recentUpdates().filter(id => users[id].updatedAt > seenUpdates).length;
   $('updDot').hidden = !ups || tab === 'updates';
+  // نجمة حمراء مثل BBM: فيه جديد في هذا القسم
+  const unreadChats = Object.values(chats).filter(c => unreadOf(c) && !isBlocked(c.lastFrom)).length;
+  const incoming = requestsReadable ? pendingRequests().filter(([, r]) => r.to === uid).length : 0;
+  setSplat('chats', unreadChats > 0);
+  setSplat('updates', ups > 0 && tab !== 'updates');
+  setSplat('pending', incoming > 0);
   updateTitle();
+}
+function setSplat(section, on){
+  const btn = document.querySelector('#s-home .classic-menu [data-section="' + section + '"]'); if (!btn) return;
+  let s = btn.querySelector('.splat');
+  if (!s) { s = el('span', 'splat'); s.setAttribute('aria-label', 'جديد'); s.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#d81e1e" stroke="#fff" stroke-width="1.6"/><path d="M12 5.2l1.9 4.2 4.6.4-3.5 3 1.1 4.5L12 15l-4.1 2.3 1.1-4.5-3.5-3 4.6-.4z" fill="#fff"/></svg>'; btn.append(s); }
+  s.hidden = !on;
 }
 
 function renderChats(){
