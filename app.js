@@ -2,15 +2,45 @@
 'use strict';
 
 const $ = id => document.getElementById(id);
-// Keep the composer visible when the iPhone keyboard changes the visible viewport.
+// One layout owner: follow the visible viewport, including Safari's focus pan.
+// Capacitor resizes the native WebView; never subtract keyboardHeight again.
+let viewportFrame = 0, nativeKeyboardOpen = false;
 function syncViewport(){
   const viewport = window.visualViewport;
-  if (viewport && viewport.scale === 1) {
-    document.documentElement.style.setProperty('--app-height', viewport.height + 'px');
-  }
+  if (viewport && Math.abs(viewport.scale - 1) > 0.01) return;
+  const root = document.documentElement;
+  const height = viewport?.height ?? window.innerHeight;
+  const top = Math.max(0, viewport?.offsetTop ?? 0);
+  if (height <= 0) return; // Ignore transient measurements during rotation.
+  const inputFocused = document.activeElement?.matches('input,textarea,[contenteditable="true"]');
+  const keyboardOpen = nativeKeyboardOpen ||
+    (inputFocused && window.innerHeight - height - top > 80);
+  const list = document.getElementById('msgList');
+  const atBottom = list && list.scrollHeight - list.scrollTop - list.clientHeight < 80;
+  root.style.setProperty('--app-height', height + 'px');
+  root.style.setProperty('--app-top', top + 'px');
+  root.classList.toggle('keyboard-open', !!keyboardOpen);
+  // Only follow the latest message if the reader was already near the bottom.
+  if (atBottom) list.scrollTop = list.scrollHeight;
 }
-window.visualViewport?.addEventListener('resize', syncViewport);
-window.addEventListener('resize', syncViewport);
+function scheduleViewport(){
+  if (viewportFrame) return;
+  viewportFrame = requestAnimationFrame(() => { viewportFrame = 0; syncViewport(); });
+}
+window.visualViewport?.addEventListener('resize', scheduleViewport);
+window.visualViewport?.addEventListener('scroll', scheduleViewport);
+window.addEventListener('resize', scheduleViewport);
+window.addEventListener('scroll', scheduleViewport, { passive: true });
+window.addEventListener('orientationchange', scheduleViewport);
+window.addEventListener('pageshow', scheduleViewport);
+document.addEventListener('visibilitychange', scheduleViewport);
+document.addEventListener('focusin', scheduleViewport);
+document.addEventListener('focusout', scheduleViewport);
+// Keyboard plugin also emits these compatibility events on window.
+window.addEventListener('keyboardWillShow', () => { nativeKeyboardOpen = true; scheduleViewport(); });
+window.addEventListener('keyboardDidShow', scheduleViewport);
+window.addEventListener('keyboardWillHide', scheduleViewport);
+window.addEventListener('keyboardDidHide', () => { nativeKeyboardOpen = false; scheduleViewport(); });
 syncViewport();
 const COLORS = ['#c0392b','#2e86c1','#239b56','#b9770e','#7d3c98','#148f77','#a04000','#2c3e8f'];
 const COUNTRIES = [
@@ -24,6 +54,11 @@ const OWNER_UID = '7KzlcizFv8TrIeqRVqi6BjNoCue2';   // صاحب التطبيق: 
 const APP_NAME = 'BPB OLD';
 // داخل تطبيق الآيفون (Capacitor): دخول بدون حساب فقط + اهتزاز حقيقي
 const IS_NATIVE = !!window.Capacitor?.isNativePlatform?.();
+if (IS_NATIVE && window.Capacitor?.getPlatform?.() === 'ios') {
+  // Disable the outer UIScrollView, leaving CSS message/form scrollers active.
+  window.Capacitor?.Plugins?.Keyboard?.setScroll({ isDisabled: true })
+    .catch(e => console.warn('Could not disable outer WebView scrolling', e));
+}
 const Haptics = IS_NATIVE ? window.Capacitor?.Plugins?.Haptics : null;
 let blocked = {};                 // المستخدمين اللي حظرتهم
 const gone = {};                  // حسابات انحذفت

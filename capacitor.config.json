@@ -2,6 +2,11 @@
   "appId": "com.zxe088.bpmold",
   "appName": "BPB OLD",
   "webDir": "www",
+  "plugins": {
+    "Keyboard": {
+      "resize": "native"
+    }
+  },
   "ios": {
     "contentInset": "never",
     "backgroundColor": "#1c2023"

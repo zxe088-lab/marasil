@@ -96,8 +96,6 @@ workflows:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
 
-    publishing:
-      app_store_connect:
-        auth: integration
-        submit_to_testflight: true
+    # Review branch: build artifacts only. Restore Apple publishing only after
+    # explicit approval; do not replace the version currently under review.
 

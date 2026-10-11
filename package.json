@@ -10,6 +10,7 @@
     "@capacitor/core": "6.1.2",
     "@capacitor/ios": "6.1.2",
     "@capacitor/haptics": "6.0.1",
+    "@capacitor/keyboard": "6.0.2",
     "firebase": "10.12.2"
   },
   "devDependencies": {
