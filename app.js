@@ -1078,6 +1078,7 @@ $('composer').addEventListener('submit', e => { e.preventDefault(); sendText(); 
 const FACES = ['🙂','😃','😁','😂','😉','😊','😍','😘','😜','😛','😎','😇','😏','😮','😳','😢','😭','😡','😤','😴','🤔','🙄','😬','🤐','🤗','🤭','😷','🤒','👍','👎','👏','🙏','💪','👌','✌️','👋','❤️','💔','💜','💙','🌹','⭐','🔥','🎉','🎂','☕','🍀','🌙'];
 function stickerFace(index){
   const face = el('span', 'bb-sticker');
+  if (![4,9,19,23,28,29,33,34,38,40,46].includes(index)) face.classList.add('round-sticker');
   face.setAttribute('role', 'img'); face.setAttribute('aria-label', 'ملصق بلاك بيري ' + (index + 1));
   face.style.setProperty('--sticker-x', String(index % 6));
   face.style.setProperty('--sticker-y', String(Math.floor(index / 6)));
