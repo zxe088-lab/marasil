@@ -272,3 +272,9 @@ form.composer .composer-face[aria-expanded="true"]{background:rgba(255,255,255,.
 .face-panel[hidden]{display:none}
 .face-panel .face{border:0;background:transparent;font-size:26px;line-height:1;padding:6px 0;border-radius:6px;touch-action:manipulation}
 .face-panel .face:active{background:#d6dde3}
+
+/* Retro BlackBerry sticker atlas, bundled locally for offline rendering. */
+.bb-sticker{--sticker-size:112px;display:inline-block;flex-shrink:0;width:var(--sticker-size);height:var(--sticker-size);background-image:url('blackberry-48.png');background-repeat:no-repeat;background-size:calc(var(--sticker-size) * 6) calc(var(--sticker-size) * 8);background-position:calc(var(--sticker-size) * var(--sticker-x) * -1) calc(var(--sticker-size) * var(--sticker-y) * -0.945);vertical-align:middle}
+.face-panel .sticker-button{display:flex;justify-content:center;align-items:center;padding:2px 0}
+.sticker-button .bb-sticker{--sticker-size:38px}
+.face-panel{grid-template-columns:repeat(6,1fr)}

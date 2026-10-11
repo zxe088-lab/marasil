@@ -1031,7 +1031,8 @@ function renderMsgs(fromMsgs){
     else { mark = el('span', 'mark d', 'D'); mark.title = 'تم التسليم'; }
     const txt = el('span', 'txt');
     if (m.broadcast) txt.append(el('span', 'bctag', '📢 بودكاست'));
-    txt.append(m.text || '');
+    if (m.kind === 'sticker' && Number.isInteger(m.sticker) && m.sticker >= 0 && m.sticker < 48) txt.append(stickerFace(m.sticker));
+    else txt.append(m.text || '');
     line.append(mark, txt);
     card.firstChild.append(line);
   });
@@ -1059,7 +1060,7 @@ async function sendMsg(data){
   const ts = Date.now(), id = chatId;
   const b = fs.batch();
   b.set(fs.collection('chats/' + id + '/messages').doc(), { from: uid, ts, kind: 'text', ...data });
-  b.update(fs.doc('chats/' + id), { lastMsg: data.kind === 'ping' ? 'PING!!!' : data.text.slice(0, 80), lastTs: ts, lastFrom: uid, lastKind: data.kind || 'text', ['read.' + uid]: ts, ['typing.' + uid]: 0 });
+  b.update(fs.doc('chats/' + id), { lastMsg: data.kind === 'ping' ? 'PING!!!' : data.kind === 'sticker' ? 'ملصق بلاك بيري' : (data.text || '').slice(0, 80), lastTs: ts, lastFrom: uid, lastKind: data.kind || 'text', ['read.' + uid]: ts, ['typing.' + uid]: 0 });
   try { await b.commit(); if (data.kind === 'ping') { play('ping'); shake(); } else play('sent'); }
   catch (e) { console.error(e); toast('ما وصلت الرسالة، تأكد من الاتصال'); }
 }
@@ -1075,15 +1076,32 @@ function sendText(){
 $('composer').addEventListener('submit', e => { e.preventDefault(); sendText(); });
 // الوجوه: زر الوجه مكان زر الإرسال، والإرسال من زر "إرسال" في الكيبورد
 const FACES = ['🙂','😃','😁','😂','😉','😊','😍','😘','😜','😛','😎','😇','😏','😮','😳','😢','😭','😡','😤','😴','🤔','🙄','😬','🤐','🤗','🤭','😷','🤒','👍','👎','👏','🙏','💪','👌','✌️','👋','❤️','💔','💜','💙','🌹','⭐','🔥','🎉','🎂','☕','🍀','🌙'];
+function stickerFace(index){
+  const face = el('span', 'bb-sticker');
+  face.setAttribute('role', 'img'); face.setAttribute('aria-label', 'ملصق بلاك بيري ' + (index + 1));
+  face.style.setProperty('--sticker-x', String(index % 6));
+  face.style.setProperty('--sticker-y', String(Math.floor(index / 6)));
+  return face;
+}
 function toggleFaces(open){
   const p = $('facePanel'); if (!p) return;
   if (open == null) open = p.hidden;
-  if (open && !p.childElementCount) FACES.forEach(f => {
+  if (open && !p.childElementCount) {
+    for (let index = 0; index < 48; index++) {
+      const b = el('button', 'face sticker-button'); b.type = 'button';
+      b.setAttribute('aria-label', 'إرسال ملصق بلاك بيري ' + (index + 1));
+      b.append(stickerFace(index));
+      b.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') e.preventDefault(); });
+      b.addEventListener('click', () => { if (!$('composer').hidden) sendMsg({kind: 'sticker', sticker: index, text: 'ملصق بلاك بيري'}); });
+      p.append(b);
+    }
+    FACES.forEach(f => {
     const b = el('button', 'face', f); b.type = 'button'; b.setAttribute('aria-label', f);
     b.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') e.preventDefault(); });
     b.addEventListener('click', () => insertFace(f));
     p.append(b);
   });
+  }
   p.hidden = !open; $('faceBtn').setAttribute('aria-expanded', String(open));
   scheduleViewport?.();
 }
