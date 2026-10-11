@@ -109,7 +109,8 @@ main>*{flex-shrink:0}
 .mark.p{background:transparent}
 .mark.p::before,.mark.dot::before{content:"";width:7px;height:7px;border-radius:50%;background:#b4bac0}
 .mark.dot{background:transparent}
-.pingcard{align-self:center;background:var(--card);color:var(--red);font-weight:800;padding:6px 16px;box-shadow:0 1px 2px rgba(0,0,0,.25);border-bottom:3px solid var(--red);text-align:center}
+.bubble .txt.ping-text{color:#d00000;direction:ltr;unicode-bidi:isolate}
+.sub.ping-preview{color:#d00000;font-weight:800;direction:ltr;unicode-bidi:isolate}
 .pingcard .pw{direction:ltr;unicode-bidi:isolate;letter-spacing:1px}
 .pingcard .t{display:block;color:var(--muted);font-weight:500;font-size:11px}
 .typing{min-height:18px;padding:0 12px;font-size:12px;color:var(--blue2);font-style:italic}
@@ -272,3 +273,54 @@ form.composer .composer-face[aria-expanded="true"]{background:rgba(255,255,255,.
 .face-panel[hidden]{display:none}
 .face-panel .face{border:0;background:transparent;font-size:26px;line-height:1;padding:6px 0;border-radius:6px;touch-action:manipulation}
 .face-panel .face:active{background:#d6dde3}
+
+/* Retro BlackBerry sticker atlas, bundled locally for offline rendering. */
+.bb-sticker{--sticker-size:56px;display:inline-block;flex-shrink:0;width:var(--sticker-size);height:calc(var(--sticker-size) * 0.95238);background-image:url('blackberry-48.png');background-repeat:no-repeat;background-size:calc(var(--sticker-size) * 6.205714) calc(var(--sticker-size) * 8.274286);background-position:calc(var(--sticker-size) * (var(--sticker-x) * -1 - 0.114286)) calc(var(--sticker-size) * (var(--sticker-y) * -0.95238 - 0.114286));vertical-align:middle}
+.face-panel .sticker-button{display:flex;justify-content:center;align-items:center;padding:2px 0}
+.sticker-button .bb-sticker{--sticker-size:38px}
+.face-panel{grid-template-columns:repeat(6,1fr)}
+.round-sticker{clip-path:ellipse(48% 48% at 50% 50%)}
+.composer-write{flex:1;min-width:0;display:flex;align-items:center;background:white;border:1px solid #111;border-radius:2px}
+form.composer .composer-write input{flex:1;width:0;min-width:0;border:0;background:transparent}
+.sticker-draft{display:flex;flex-shrink:0;align-items:center;gap:2px;padding:4px}
+.sticker-draft[hidden]{display:none}
+.sticker-draft .bb-sticker{--sticker-size:38px}
+.remove-sticker{border:0;background:transparent;color:#555;font-size:22px;padding:4px 8px}
+.sticker-message{min-width:0}
+.sticker-caption{min-width:0;overflow-wrap:anywhere}
+.sticker-caption{margin-inline-start:4px}
+.bubble .txt .bb-sticker,.message-editor .bb-sticker{--sticker-size:22px;vertical-align:-4px}
+.message-editor{flex:1;width:0;min-width:0;min-height:42px;max-height:112px;overflow-y:auto;padding:9px 8px;color:#fff;direction:rtl;white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;line-height:24px;outline:none}
+.message-editor:empty::before{content:attr(data-placeholder);color:#ddd;pointer-events:none}
+/* Rounded message bar; the device keeps its native keyboard. */
+#s-chat form.composer{direction:ltr;gap:7px;background:transparent;align-items:center}
+#s-chat .composer-write{background:rgba(24,24,24,.9);border:1px solid rgba(128,128,128,.35);border-radius:26px;min-height:46px;overflow:hidden}
+#s-chat .composer-write input{color:#fff;direction:rtl;padding:10px 6px;font-style:normal}
+#s-chat .composer-write input::placeholder{color:#aaa}
+#s-chat form.composer .composer-ping{order:0;flex:0 0 46px;width:46px;height:46px;border:1px solid #444;border-radius:50%;background:rgba(24,24,24,.9);color:#ff4545;font-size:10px;font-weight:700;direction:ltr}
+#s-chat form.composer .composer-face{order:0;flex:0 0 38px;width:38px;height:42px;padding:7px;color:#fff;background:transparent}
+.composer-camera,.composer-voice{flex:0 0 44px;width:44px;height:44px;padding:9px;border:1px solid #444;border-radius:50%;display:grid;place-items:center;background:rgba(24,24,24,.9);color:#fff;touch-action:manipulation}
+.composer-voice{background:#19ca61;color:#063d1c;border-color:#19ca61}
+.composer-voice.recording{background:#df3030;color:#fff;border-color:#df3030}
+.composer svg{width:25px;height:25px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#s-chat form.composer .composer-face svg{width:24px;height:24px}
+.composer-voice rect{fill:currentColor;stroke:none}
+.voice-draft{display:flex;align-items:center;gap:8px;padding:8px;background:#242424;color:#fff}
+.voice-draft[hidden],.once-viewer[hidden]{display:none}
+.voice-draft audio{flex:1;min-width:0;height:36px}
+.voice-draft button{border:0;border-radius:8px;padding:8px;background:#19ca61;color:#063d1c}
+.voice-draft button:last-child{background:transparent;color:#fff}
+.chat-audio{max-width:100%;width:230px;height:40px}
+.once-photo{border:1px solid #aaa;border-radius:8px;padding:10px;background:transparent;color:inherit;font:inherit}
+.once-viewer{position:fixed;z-index:1000;inset:0;background:#101010;display:flex;flex-direction:column;align-items:center;justify-content:center;color:white;padding:20px}
+.once-viewer img{max-width:100%;max-height:80vh;object-fit:contain}
+.once-viewer button{position:absolute;top:calc(14px + env(safe-area-inset-top));right:16px;border:0;background:transparent;color:white;font-size:34px}
+@media(max-width:360px){
+  #s-chat form.composer{gap:5px;padding-inline:8px}
+  #s-chat form.composer .composer-ping{flex-basis:40px;width:40px;height:40px;font-size:9px}
+  .composer-camera,.composer-voice{flex-basis:38px;width:38px;height:38px;padding:7px}
+  .sticker-draft .bb-sticker{--sticker-size:28px}
+  .remove-sticker{padding:0 2px;font-size:18px}
+}
+
+

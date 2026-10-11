@@ -13,7 +13,7 @@
 <link rel="manifest" href="manifest.json">
 <title>BPB OLD</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=22">
+<link rel="stylesheet" href="style.css?v=26">
 </head>
 <body>
 <!-- أيقونات -->
@@ -227,12 +227,19 @@
     </div>
     <div class="face-panel" id="facePanel" hidden></div>
     <form class="composer" id="composer">
-      <button type="button" id="pingBtn" class="composer-ping" aria-label="وكز"><svg aria-hidden="true"><use href="#i-ping"/></svg><span>وكز</span></button>
-      <input id="msgInput" maxlength="2000" placeholder="أدخل رسالة" aria-label="الرسالة" autocomplete="off" enterkeyhint="send">
-      <button type="button" id="faceBtn" class="composer-face" aria-label="الوجوه" aria-expanded="false" aria-controls="facePanel"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#ffd21f" stroke="#a87400" stroke-width="1.2"/><circle cx="8.6" cy="9.6" r="1.4" fill="#3a2a00"/><circle cx="15.4" cy="9.6" r="1.4" fill="#3a2a00"/><path d="M7.5 14c1.2 2 2.7 3 4.5 3s3.3-1 4.5-3" fill="none" stroke="#3a2a00" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+      <button type="button" id="pingBtn" class="composer-ping" aria-label="وكز PING!!">PING!!</button>
+      <div class="composer-write">
+        <div id="msgInput" class="message-editor" contenteditable="true" role="textbox" aria-label="الرسالة" aria-multiline="true" data-placeholder="أدخل رسالة" enterkeyhint="send" spellcheck="true"></div>
+        <button type="button" id="faceBtn" class="composer-face" aria-label="فيسات" aria-expanded="false" aria-controls="facePanel"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="9" cy="9" r=".7"/><circle cx="15" cy="9" r=".7"/><path d="M8 14q4 5 8 0"/></svg></button>
+      </div>
+      <button type="button" id="cameraBtn" class="composer-camera" aria-label="صورة تُعرض مرة واحدة"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h4l2-3h6l2 3h4v13H3z"/><circle cx="12" cy="13" r="4"/></svg></button>
+      <button type="button" id="voiceSendBtn" class="composer-voice" aria-label="تسجيل صوتي"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M6 11v2a6 6 0 0 0 12 0v-2M12 19v3"/></svg></button>
+      <input id="chatCameraInput" type="file" accept="image/*" capture="environment" hidden>
     </form>
+    <div id="voiceDraft" class="voice-draft" hidden></div>
   </div>
 
+  <div id="onceViewer" class="once-viewer" hidden role="dialog" aria-modal="true" aria-label="صورة لمرة واحدة"><button type="button" id="closeOnceViewer" aria-label="إغلاق الصورة">×</button><img id="onceImage" alt="صورة لمرة واحدة"><p>هذه الصورة تُعرض مرة واحدة</p></div>
   <!-- نافذة -->
   <div id="modal" class="modal" hidden>
     <form class="modal-box" id="modalForm">
@@ -251,6 +258,9 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="app.js?v=22"></script>
+<script src="app.js?v=26"></script>
 </body>
 </html>
+
+
+

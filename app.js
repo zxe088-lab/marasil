@@ -3,15 +3,17 @@
 
 const $ = id => document.getElementById(id);
 // One layout owner: follow the visible viewport, including Safari's focus pan.
-// Capacitor resizes the native WebView; never subtract keyboardHeight again.
-let viewportFrame = 0, nativeKeyboardOpen = false;
+// Predict the native keyboard inset at will-show; cap the viewport instead of subtracting twice.
+let viewportFrame = 0, nativeKeyboardOpen = false, nativeKeyboardTarget = null, closedViewportHeight = window.innerHeight;
 function syncViewport(){
   const viewport = window.visualViewport;
   if (viewport && Math.abs(viewport.scale - 1) > 0.01) return;
   const root = document.documentElement;
-  const height = viewport?.height ?? window.innerHeight;
+  let height = viewport?.height ?? window.innerHeight;
   const top = Math.max(0, viewport?.offsetTop ?? 0);
   if (height <= 0) return; // Ignore transient measurements during rotation.
+  if (!nativeKeyboardOpen) closedViewportHeight = window.innerHeight;
+  if (nativeKeyboardOpen && nativeKeyboardTarget !== null) height = Math.min(height, nativeKeyboardTarget);
   const inputFocused = document.activeElement?.matches('input,textarea,[contenteditable="true"]');
   const keyboardOpen = nativeKeyboardOpen ||
     (inputFocused && window.innerHeight - height - top > 80);
@@ -37,10 +39,16 @@ document.addEventListener('visibilitychange', scheduleViewport);
 document.addEventListener('focusin', scheduleViewport);
 document.addEventListener('focusout', scheduleViewport);
 // Keyboard plugin also emits these compatibility events on window.
-window.addEventListener('keyboardWillShow', () => { nativeKeyboardOpen = true; scheduleViewport(); });
+window.addEventListener('keyboardWillShow', event => {
+  const keyboardHeight = Number(event?.keyboardHeight ?? event?.detail?.keyboardHeight);
+  if (!nativeKeyboardOpen) closedViewportHeight = window.innerHeight;
+  nativeKeyboardOpen = true;
+  nativeKeyboardTarget = Number.isFinite(keyboardHeight) && keyboardHeight > 0 && keyboardHeight < closedViewportHeight ? closedViewportHeight - keyboardHeight : null;
+  syncViewport();
+});
 window.addEventListener('keyboardDidShow', scheduleViewport);
 window.addEventListener('keyboardWillHide', scheduleViewport);
-window.addEventListener('keyboardDidHide', () => { nativeKeyboardOpen = false; scheduleViewport(); });
+window.addEventListener('keyboardDidHide', () => { nativeKeyboardOpen = false; nativeKeyboardTarget = null; scheduleViewport(); });
 syncViewport();
 const COLORS = ['#c0392b','#2e86c1','#239b56','#b9770e','#7d3c98','#148f77','#a04000','#2c3e8f'];
 const COUNTRIES = [
@@ -241,10 +249,8 @@ const buzz = pattern => {
     navigator.vibrate?.(pattern);
   } catch {}
 };
-function shake(){ const a = $('app'); a.classList.remove('shake'); void a.offsetWidth; a.classList.add('shake'); }
 function nudgeEffect(){
-  play('ping'); buzz([400, 100, 400, 100, 400, 100, 800]); shake(); setTimeout(shake, 600);
-  try { Haptics?.notification({ type: 'WARNING' }); } catch {}
+  buzz([400, 100, 400, 100, 400, 100, 800]);
 }
 
 /* ---------- التنقل ---------- */
@@ -467,6 +473,7 @@ function listen(){
       }
     });
     chats = {}; s.docs.forEach(d => chats[d.id] = d.data());
+    cleanupInactiveChats();
     firstChatsSnap = false;
     renderHomeSoon();
   });
@@ -475,7 +482,7 @@ function listen(){
 /* ---------- الرئيسية ---------- */
 let homeTimer = null;
 function renderHomeSoon(){ clearTimeout(homeTimer); homeTimer = setTimeout(renderHome, 30); }
-const unreadOf = c => c.lastFrom && c.lastFrom !== uid && c.lastTs > ((c.read || {})[uid] || 0);
+const unreadOf = c => c.lastTs > Date.now()-MESSAGE_LIFETIME && c.lastFrom && c.lastFrom !== uid && c.lastTs > ((c.read || {})[uid] || 0);
 
 function renderHome(){
   if (!me) return;
@@ -499,15 +506,15 @@ function renderHome(){
 
 function renderChats(){
   const list = $('chatList'); list.replaceChildren();
-  const arr = Object.entries(chats).filter(([, c]) => { const p = c.members.find(m => m !== uid); return c.lastTs && !isBlocked(p) && !gone[p]; }).sort((a, b) => b[1].lastTs - a[1].lastTs);
+  const arr = Object.entries(chats).filter(([, c]) => { const p = c.members.find(m => m !== uid); return c.lastTs > Date.now()-MESSAGE_LIFETIME && !isBlocked(p) && !gone[p]; }).sort((a, b) => b[1].lastTs - a[1].lastTs);
   if (!arr.length) { list.append(el('div', 'empty', 'ما فيه دردشات. افتح جهات الاتصال واختر أحداً لبدء الدردشة.')); return; }
   arr.forEach(([, c]) => {
     const peer = c.members.find(m => m !== uid), un = unreadOf(c);
     const row = el('button', 'row' + (un ? ' unread' : '')); row.type = 'button';
     const info = el('span', 'info');
     const nm = el('span', 'nm'); nm.append(statusIcon(peer), el('span', '', nameOf(peer)));
-    const last = c.lastKind === 'ping' ? 'وكزة PING!!!' : (c.lastFrom === uid ? 'أنت: ' : '') + (c.lastKind === 'broadcast' ? '📢 ' : '') + (c.lastMsg || '');
-    info.append(nm, el('span', 'sub' + (c.lastKind === 'broadcast' ? ' bc' : ''), last));
+    const last = c.lastKind === 'ping' ? 'PING!!!' : (c.lastFrom === uid ? 'أنت: ' : '') + (c.lastKind === 'broadcast' ? '📢 ' : '') + (c.lastMsg || '');
+    info.append(nm, el('span', 'sub' + (c.lastKind === 'broadcast' ? ' bc' : c.lastKind === 'ping' ? ' ping-preview' : ''), last));
     const side = el('span', 'side'); side.append(el('span', 'when', shortWhen(c.lastTs)));
     if (un) side.append(el('span', 'newpill', 'جديد'));
     row.append(avatar(peer, 'sm'), info, side);
@@ -974,7 +981,8 @@ async function openChat(peer){
   watchUser(peer); renderChatHead();
   $('msgList').replaceChildren(el('div', 'empty', 'جاري التحميل…'));
   unsubChat = fs.doc('chats/' + id).onSnapshot(s => { curChat = s.data() || {}; renderMsgs(); renderTyping(); });
-  unsubMsgs = fs.collection('chats/' + id + '/messages').orderBy('ts', 'desc').limit(150)
+  cleanExpiredMessages(id);
+  unsubMsgs = fs.collection('chats/' + id + '/messages').where('ts','>',Date.now()-MESSAGE_LIFETIME).orderBy('ts', 'desc').limit(30)
     .onSnapshot({ includeMetadataChanges: true }, s => {
       msgs = s.docs.map(d => ({ id: d.id, pending: d.metadata.hasPendingWrites, ...d.data() })).reverse();
       if (!firstMsgsSnap) {
@@ -985,7 +993,7 @@ async function openChat(peer){
       renderMsgs(true);
     });
 }
-function closeChat(){ toggleFaces(false); unsubMsgs?.(); unsubChat?.(); unsubMsgs = unsubChat = null; chatId = chatPeer = null; }
+function closeChat(){ cancelVoice(); closeOncePhoto(); clearDraftSticker(); toggleFaces(false); unsubMsgs?.(); unsubChat?.(); unsubMsgs = unsubChat = null; chatId = chatPeer = null; }
 function renderChatHead(){
   if (!chatPeer) return;
   const d = users[chatPeer] || {};
@@ -1007,14 +1015,10 @@ function renderMsgs(fromMsgs){
   const peerRead = (curChat?.read || {})[chatPeer] || 0;
   let lastDay = '', card = null, cardFrom = null, cardTs = 0;
   msgs.forEach(m => {
+    if(m.ts <= Date.now()-MESSAGE_LIFETIME) return;
     const day = fmtDay(m.ts);
     if (day !== lastDay) { list.append(el('div', 'day', day)); lastDay = day; card = null; }
     const mine = m.from === uid;
-    if (m.kind === 'ping') {
-      const p = el('div', 'pingcard');
-      p.append(mine ? 'وكزت ' : 'وكزك ', el('bdi', '', nameOf(mine ? chatPeer : m.from)), ' ', el('span', 'pw', 'PING!!!'), el('span', 't', fmtTime(m.ts)));
-      list.append(p); card = null; return;
-    }
     if (!card || cardFrom !== m.from || m.ts - cardTs > GROUP_MS) {
       card = el('div', 'bubble' + (mine ? ' mine' : ''));
       const content = el('div', 'content'), head = el('div', 'head');
@@ -1031,7 +1035,28 @@ function renderMsgs(fromMsgs){
     else { mark = el('span', 'mark d', 'D'); mark.title = 'تم التسليم'; }
     const txt = el('span', 'txt');
     if (m.broadcast) txt.append(el('span', 'bctag', '📢 بودكاست'));
-    txt.append(m.text || '');
+    if(m.kind === 'richtext' && Array.isArray(m.parts)) {
+      for(const part of m.parts.slice(0,128)){
+        if(typeof part.text==='string') txt.append(document.createTextNode(part.text));
+        else if(Number.isInteger(part.sticker)&&part.sticker>=0&&part.sticker<48) txt.append(stickerFace(part.sticker));
+      }
+    }
+    else if (m.kind === 'sticker' && Number.isInteger(m.sticker) && m.sticker >= 0 && m.sticker < 48) {
+      txt.classList.add('sticker-message');
+      txt.append(stickerFace(m.sticker));
+      if (m.text && m.text !== 'ملصق بلاك بيري') txt.append(el('span', 'sticker-caption', m.text));
+    }
+    else if (m.kind === 'voice') {
+      const targetChat=chatId, button=el('button','once-photo','تشغيل الرسالة الصوتية');button.type='button';
+      button.onclick=async()=>{button.disabled=true;try{const doc=await fs.doc('chats/'+targetChat+'/voiceClips/'+m.id).get();if(!doc.exists||doc.data().expiresAt.toMillis()<=Date.now()){button.textContent='انتهت صلاحية الصوت';return;}const data=doc.data().audio;if(!/^data:audio\/(mp4|webm|ogg)(;codecs=[^;,]+)?;base64,/.test(data))throw new Error('Invalid audio');const audio=el('audio','chat-audio');audio.controls=true;audio.src=data;button.replaceWith(audio);audio.play().catch(()=>{});}catch(error){button.disabled=false;toast('تعذّر تحميل الصوت');}};txt.append(button);
+    }
+    else if (m.kind === 'once-photo') {
+      const button = el('button', 'once-photo', m.opened ? 'تمت مشاهدة الصورة' : mine ? 'صورة لمرة واحدة' : 'فتح الصورة · مرة واحدة');
+      button.type = 'button'; button.disabled = !!m.opened || mine;
+      const targetChat = chatId; button.onclick = () => openOncePhoto(targetChat, m.id, button); txt.append(button);
+    }
+    else if (m.kind === 'ping') { txt.classList.add('ping-text'); txt.textContent = 'PING!!!'; }
+    else txt.append(m.text || '');
     line.append(mark, txt);
     card.firstChild.append(line);
   });
@@ -1054,50 +1079,227 @@ function renderTyping(){
 }
 setInterval(renderTyping, 1500);
 
-async function sendMsg(data){
-  if (!chatId) return;
+async function sendMsg(data, expectedChat = chatId){
+  if (!chatId || chatId !== expectedChat || $('composer').hidden) return false;
   const ts = Date.now(), id = chatId;
   const b = fs.batch();
-  b.set(fs.collection('chats/' + id + '/messages').doc(), { from: uid, ts, kind: 'text', ...data });
-  b.update(fs.doc('chats/' + id), { lastMsg: data.kind === 'ping' ? 'PING!!!' : data.text.slice(0, 80), lastTs: ts, lastFrom: uid, lastKind: data.kind || 'text', ['read.' + uid]: ts, ['typing.' + uid]: 0 });
-  try { await b.commit(); if (data.kind === 'ping') { play('ping'); shake(); } else play('sent'); }
-  catch (e) { console.error(e); toast('ما وصلت الرسالة، تأكد من الاتصال'); }
+  const message=fs.collection('chats/' + id + '/messages').doc(), expiresAt=firebase.firestore.Timestamp.fromMillis(ts + MESSAGE_LIFETIME);
+  const messageData={from:uid,ts,kind:'text',...data,expiresAt};
+  if(data.kind==='voice'){delete messageData.audio;b.set(fs.doc('chats/'+id+'/voiceClips/'+message.id),{from:uid,audio:data.audio,expiresAt});}
+  b.set(message,messageData);
+  b.update(fs.doc('chats/' + id), { lastMsg: data.kind === 'ping' ? 'PING!!!' : data.kind === 'voice' ? 'رسالة صوتية' : data.kind === 'sticker' ? 'فيس بلاك بيري' : (data.text || '').slice(0, 80), lastTs: ts, lastFrom: uid, lastKind: data.kind || 'text', ['read.' + uid]: ts, ['typing.' + uid]: 0 });
+  try { await b.commit(); if (data.kind === 'ping') nudgeEffect(); else play('sent'); return true; }
+  catch (e) { console.error(e); toast('ما وصلت الرسالة، تأكد من الاتصال'); return false; }
+}
+let draftSticker = null;
+let editorRange = null, lastEditorParts = [];
+let voiceState = null, voiceDraftUrl = null, voiceBusy = false, photoBusy = false;
+const MESSAGE_LIFETIME = 24 * 60 * 60 * 1000;
+const cleanedChats = new Set();
+let inactiveCleanupRunning = false;
+async function cleanupInactiveChats(){
+  if(inactiveCleanupRunning || document.hidden) return;
+  inactiveCleanupRunning=true;
+  try {
+    const stale=Object.entries(chats).filter(([id,c])=>c.lastTs && c.lastTs<=Date.now()-MESSAGE_LIFETIME&&!cleanedChats.has(id)).slice(0,10);
+    for(const [id] of stale){cleanedChats.add(id);await cleanExpiredMessages(id);}
+  } finally {inactiveCleanupRunning=false;}
+}
+function mediaData(blob){ return new Promise((resolve,reject) => { const reader=new FileReader(); reader.onload=()=>resolve(reader.result); reader.onerror=reject; reader.readAsDataURL(blob); }); }
+function closeOncePhoto(){ const image=$('onceImage'); if(image) image.removeAttribute('src'); if($('onceViewer')) $('onceViewer').hidden=true; }
+async function openOncePhoto(id, messageId, button){
+  if(id!==chatId || $('composer').hidden) return;
+  button.disabled=true;
+  try {
+    const messageRef=fs.doc('chats/'+id+'/messages/'+messageId), photoRef=fs.doc('chats/'+id+'/oncePhotos/'+messageId);
+    const data=await fs.runTransaction(async tx=>{
+      const message=await tx.get(messageRef), photo=await tx.get(photoRef);
+      if(!message.exists || message.data().opened || !photo.exists) return null;
+      const payload=photo.data();
+      if(payload.to!==uid || payload.expiresAt.toMillis()<=Date.now()) return null;
+      tx.delete(photoRef); tx.update(messageRef,{opened:true}); return payload.image;
+    });
+    if(!data) { button.textContent='الصورة غير متاحة'; return; }
+    if(id!==chatId || document.hidden) return;
+    $('onceImage').src=data; $('onceViewer').hidden=false;
+  } catch(error){ console.error(error); button.disabled=false; toast('تعذّر فتح الصورة، تأكد من الاتصال'); }
+}
+function cancelVoice(){
+  if(voiceState){ voiceState.cancelled=true; clearTimeout(voiceState.timer); if(voiceState.recorder?.state==='recording') voiceState.recorder.stop(); voiceState.stream?.getTracks().forEach(t=>t.stop()); voiceState=null; }
+  if(voiceDraftUrl) URL.revokeObjectURL(voiceDraftUrl); voiceDraftUrl=null;
+  $('voiceDraft')?.replaceChildren(); if($('voiceDraft')) $('voiceDraft').hidden=true;
+  $('voiceSendBtn')?.classList.remove('recording');
+}
+async function startVoice(){
+  if(!chatId || $('composer').hidden || voiceBusy || voiceState) return;
+  if(!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder){ toast('التسجيل الصوتي غير متاح على هذا الجهاز'); return; }
+  cancelVoice(); const state={id:chatId,cancelled:false}; voiceState=state;
+  try {
+    state.stream=await navigator.mediaDevices.getUserMedia({audio:true});
+    if(state.cancelled || state.id!==chatId){ state.stream.getTracks().forEach(t=>t.stop()); return; }
+    const mime=['audio/mp4','audio/webm;codecs=opus','audio/ogg;codecs=opus'].find(t=>MediaRecorder.isTypeSupported(t));
+    if(!mime) throw new Error('Unsupported audio format');
+    state.recorder=new MediaRecorder(state.stream,{mimeType:mime,audioBitsPerSecond:24000}); const chunks=[];
+    state.recorder.ondataavailable=e=>{if(e.data.size) chunks.push(e.data);};
+    state.recorder.onerror=()=>{if(voiceState===state){cancelVoice();updateComposer();toast('تعذّر تسجيل الصوت');}};
+    state.recorder.onstop=async()=>{
+      clearTimeout(state.timer); state.stream.getTracks().forEach(t=>t.stop());
+      if(state.cancelled || state.id!==chatId) return;
+      voiceState=null; $('voiceSendBtn').classList.remove('recording'); updateComposer();
+      const blob=new Blob(chunks,{type:mime});
+      if(!blob.size || blob.size>450000){toast('التسجيل طويل جدًا، جرّب مقطعًا أقصر');return;}
+      voiceDraftUrl=URL.createObjectURL(blob); const audio=el('audio');audio.controls=true;audio.src=voiceDraftUrl;
+      const send=el('button','','إرسال'), discard=el('button','','إلغاء');send.type=discard.type='button';
+      send.onclick=async()=>{if(voiceBusy || state.id!==chatId || $('composer').hidden)return;voiceBusy=true;send.disabled=true;try{if(await sendMsg({kind:'voice',audio:await mediaData(blob)},state.id)) cancelVoice();}finally{voiceBusy=false;send.disabled=false;}};
+      discard.onclick=()=>{cancelVoice();updateComposer();};$('voiceDraft').replaceChildren(audio,send,discard);$('voiceDraft').hidden=false;
+    };
+    state.recorder.start(); $('voiceSendBtn').classList.add('recording');$('voiceSendBtn').setAttribute('aria-label','إيقاف التسجيل');
+    $('voiceDraft').replaceChildren(el('span','','جاري التسجيل · اضغط المايك للإيقاف · 30 ثانية كحد أقصى'));$('voiceDraft').hidden=false;
+    state.timer=setTimeout(()=>{if(state.recorder.state==='recording')state.recorder.stop();},30000);
+  } catch(error){if(voiceState===state){cancelVoice();updateComposer();toast('اسمح باستخدام المايك من إعدادات الجهاز لتسجيل الصوت');}}
+}
+async function sendOncePhoto(file){
+  if(photoBusy || !chatId || $('composer').hidden) return;
+  if(!file.type.startsWith('image/') || file.size>20000000){toast('اختر صورة بحجم أقل من 20 ميجابايت');return;}
+  photoBusy=true; const id=chatId, recipient=chatPeer; let objectUrl;
+  try {
+    objectUrl=URL.createObjectURL(file);const image=new Image();image.src=objectUrl;await image.decode();
+    const scale=Math.min(1,960/Math.max(image.width,image.height)),canvas=document.createElement('canvas');
+    canvas.width=Math.max(1,Math.round(image.width*scale));canvas.height=Math.max(1,Math.round(image.height*scale));
+    canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height);
+    let payload=canvas.toDataURL('image/jpeg',.65);
+    if(payload.length>600000) payload=canvas.toDataURL('image/jpeg',.4);
+    if(payload.length>600000) throw new Error('Photo too large');
+    if(id!==chatId || $('composer').hidden) return;
+    const ts=Date.now(),expiresAt=firebase.firestore.Timestamp.fromMillis(ts+MESSAGE_LIFETIME);
+    const message=fs.collection('chats/'+id+'/messages').doc(),batch=fs.batch();
+    batch.set(message,{from:uid,ts,kind:'once-photo',opened:false,expiresAt});
+    batch.set(fs.doc('chats/'+id+'/oncePhotos/'+message.id),{from:uid,to:recipient,image:payload,expiresAt});
+    batch.update(fs.doc('chats/'+id),{lastMsg:'صورة لمرة واحدة',lastTs:ts,lastFrom:uid,lastKind:'once-photo',['read.'+uid]:ts});
+    await batch.commit(); play('sent');
+  } catch(error){console.error(error);toast('تعذّر إرسال الصورة، تأكد من الاتصال والصلاحيات');}
+  finally {if(objectUrl)URL.revokeObjectURL(objectUrl);photoBusy=false;}
+}
+async function cleanExpiredMessages(id){
+  try {
+    const expired=await fs.collection('chats/'+id+'/messages').where('ts','<=',Date.now()-MESSAGE_LIFETIME).limit(100).get();
+    if(expired.empty)return;
+    const batch=fs.batch();expired.docs.forEach(d=>{batch.delete(d.ref);if(d.data().kind==='once-photo')batch.delete(fs.doc('chats/'+id+'/oncePhotos/'+d.id));if(d.data().kind==='voice')batch.delete(fs.doc('chats/'+id+'/voiceClips/'+d.id));});await batch.commit();
+  } catch(error){console.warn('Message cleanup unavailable',error.code);}
+}
+$('voiceSendBtn').onclick=()=>{if(voiceState?.recorder?.state==='recording')voiceState.recorder.stop();else if($('voiceSendBtn').dataset.mode==='send')sendText();else startVoice();};
+$('cameraBtn').onclick=()=>{if(chatId&&!$('composer').hidden)$('chatCameraInput').click();};
+$('chatCameraInput').onchange=()=>{const file=$('chatCameraInput').files[0];$('chatCameraInput').value='';if(file)sendOncePhoto(file);};
+$('closeOnceViewer').onclick=closeOncePhoto;
+document.addEventListener('visibilitychange',()=>{if(document.hidden){cancelVoice();closeOncePhoto();updateComposer();}});
+setInterval(()=>{if(!document.hidden){if(chatId)renderMsgs();renderChats();}},60000);
+function editorParts(){
+  const parts=[];
+  const text=value=>{value=value.replace(/\u200b/g,'');if(!value)return;const last=parts[parts.length-1];if(last&&typeof last.text==='string')last.text+=value;else parts.push({text:value});};
+  const walk=node=>{
+    if(node.nodeType===Node.TEXT_NODE){text(node.nodeValue);return;}
+    if(node.nodeType!==Node.ELEMENT_NODE)return;
+    if(node.hasAttribute('data-sticker')){const index=Number(node.dataset.sticker);if(Number.isInteger(index)&&index>=0&&index<48)parts.push({sticker:index});return;}
+    if(node.tagName==='BR'){text('\n');return;}
+    if((node.tagName==='DIV'||node.tagName==='P')&&parts.length)text('\n');
+    node.childNodes.forEach(walk);
+  };
+  $('msgInput').childNodes.forEach(walk);return parts;
+}
+function partsText(parts){return parts.map(p=>typeof p.text==='string'?p.text:'☺').join('');}
+function restoreEditor(parts){
+  const input=$('msgInput');input.replaceChildren();
+  parts.forEach(p=>{if(typeof p.text==='string')input.append(document.createTextNode(p.text));else{const face=stickerFace(p.sticker);face.dataset.sticker=p.sticker;face.contentEditable='false';input.append(face,document.createTextNode('\u200b'));}});
+  editorRange=null;
+}
+function rememberEditorRange(){
+  const selection=window.getSelection();if(!selection?.rangeCount)return;
+  const range=selection.getRangeAt(0), input=$('msgInput');
+  if(input.contains(range.startContainer)&&input.contains(range.endContainer))editorRange=range.cloneRange();
+}
+function insertEditorNode(node){
+  const input=$('msgInput'); input.focus({preventScroll:true});
+  let range=editorRange;
+  if(!range || !input.contains(range.startContainer)||!input.contains(range.endContainer)){range=document.createRange();range.selectNodeContents(input);range.collapse(false);}
+  range.deleteContents();range.insertNode(node);
+  const tail=document.createTextNode('\u200b');node.after(tail);range.setStart(tail,1);range.collapse(true);
+  const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);editorRange=range.cloneRange();
+  input.dispatchEvent(new Event('input',{bubbles:true}));
+}
+function clearDraftSticker(){ draftSticker=null; $('msgInput').replaceChildren();editorRange=null;lastEditorParts=[];updateComposer(); }
+function selectSticker(index){
+  if ($('composer').hidden) return;
+  if(partsText(editorParts()).length>=2000||editorParts().length>=127)return;
+  const face=stickerFace(index);face.dataset.sticker=index;face.contentEditable='false';insertEditorNode(face);
 }
 function updateComposer(){
-  if ($('composer').hidden) toggleFaces(false);
+  if ($('composer').hidden) { toggleFaces(false); if ($('msgInput').childNodes.length) clearDraftSticker(); cancelVoice(); }
+  const button = $('voiceSendBtn'); if (!button) return;
+  const sending = !!partsText(editorParts()).trim();
+  button.setAttribute('aria-label', sending ? 'إرسال' : 'تسجيل صوتي');
+  button.dataset.mode = sending ? 'send' : 'voice';
+  if (!button.classList.contains('recording')) button.innerHTML = sending ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 3 17 9-17 9 3-9zM7 12h14"/></svg>' : '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M6 11v2a6 6 0 0 0 12 0v-2M12 19v3"/></svg>';
 }
 function sendText(){
   const input = $('msgInput');
-  const text = input.value.trim(); if (!text || $('composer').hidden) return;
-  input.value = ''; updateComposer(); sendMsg({ kind: 'text', text });
+  const parts=editorParts(),text=partsText(parts).trim();if(!text||$('composer').hidden)return;
+  if(text.length>2000||parts.length>128){toast('الرسالة طويلة جدًا');return;}
+  const data=parts.some(p=>Number.isInteger(p.sticker))?{kind:'richtext',text,parts}:{kind:'text',text};
+  clearDraftSticker(); updateComposer(); sendMsg(data);
   input.focus({ preventScroll: true });
 }
 $('composer').addEventListener('submit', e => { e.preventDefault(); sendText(); });
 // الوجوه: زر الوجه مكان زر الإرسال، والإرسال من زر "إرسال" في الكيبورد
 const FACES = ['🙂','😃','😁','😂','😉','😊','😍','😘','😜','😛','😎','😇','😏','😮','😳','😢','😭','😡','😤','😴','🤔','🙄','😬','🤐','🤗','🤭','😷','🤒','👍','👎','👏','🙏','💪','👌','✌️','👋','❤️','💔','💜','💙','🌹','⭐','🔥','🎉','🎂','☕','🍀','🌙'];
+function stickerFace(index){
+  const face = el('span', 'bb-sticker');
+  if (![4,9,19,23,28,29,33,34,38,40,46].includes(index)) face.classList.add('round-sticker');
+  face.setAttribute('role', 'img'); face.setAttribute('aria-label', 'ملصق بلاك بيري ' + (index + 1));
+  face.style.setProperty('--sticker-x', String(index % 6));
+  face.style.setProperty('--sticker-y', String(Math.floor(index / 6)));
+  return face;
+}
 function toggleFaces(open){
   const p = $('facePanel'); if (!p) return;
   if (open == null) open = p.hidden;
-  if (open && !p.childElementCount) FACES.forEach(f => {
+  if (open && !p.childElementCount) {
+    for (let index = 0; index < 48; index++) {
+      const b = el('button', 'face sticker-button'); b.type = 'button';
+      b.setAttribute('aria-label', 'إرسال ملصق بلاك بيري ' + (index + 1));
+      b.append(stickerFace(index));
+      b.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') e.preventDefault(); });
+      b.addEventListener('click', () => selectSticker(index));
+      p.append(b);
+    }
+    FACES.forEach(f => {
     const b = el('button', 'face', f); b.type = 'button'; b.setAttribute('aria-label', f);
     b.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') e.preventDefault(); });
     b.addEventListener('click', () => insertFace(f));
     p.append(b);
   });
+  }
   p.hidden = !open; $('faceBtn').setAttribute('aria-expanded', String(open));
   scheduleViewport?.();
 }
 function insertFace(f){
-  const input = $('msgInput'), v = input.value;
-  const a = input.selectionStart ?? v.length, b = input.selectionEnd ?? v.length;
-  if ((v.length - (b - a) + f.length) > input.maxLength) return;
-  input.value = v.slice(0, a) + f + v.slice(b);
-  const pos = a + f.length; try { input.setSelectionRange(pos, pos); } catch {}
-  input.dispatchEvent(new Event('input', { bubbles: true }));
+  if(partsText(editorParts()).length+f.length>2000)return;insertEditorNode(document.createTextNode(f));
 }
+document.addEventListener('selectionchange',rememberEditorRange);
+$('msgInput').addEventListener('beforeinput',e=>{
+  if(e.inputType!=='deleteContentBackward')return;
+  const selection=window.getSelection();if(!selection?.rangeCount)return;const range=selection.getRangeAt(0);if(!range.collapsed)return;
+  const node=range.startContainer;let chip=null;
+  if(node.nodeType===Node.TEXT_NODE&&!node.nodeValue.slice(0,range.startOffset).replace(/\u200b/g,''))chip=node.previousSibling;
+  else if(node===$('msgInput'))chip=node.childNodes[range.startOffset-1];
+  if(chip?.nodeType===Node.ELEMENT_NODE&&chip.hasAttribute('data-sticker')){e.preventDefault();range.setStartBefore(chip);range.collapse(true);chip.remove();selection.removeAllRanges();selection.addRange(range);editorRange=range.cloneRange();$('msgInput').dispatchEvent(new Event('input',{bubbles:true}));}
+});
+$('msgInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();sendText();}});
+$('msgInput').addEventListener('paste',e=>{e.preventDefault();const text=e.clipboardData?.getData('text/plain')||'';if(partsText(editorParts()).length+text.length<=2000)insertEditorNode(document.createTextNode(text));});
+$('msgInput').addEventListener('drop',e=>e.preventDefault());
 $('faceBtn').addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') e.preventDefault(); });
 $('faceBtn').addEventListener('click', () => toggleFaces());
 $('msgInput').addEventListener('input', () => {
+  const parts=editorParts();if(partsText(parts).length>2000||parts.length>128)restoreEditor(lastEditorParts);else {lastEditorParts=parts;if(!parts.length){$('msgInput').replaceChildren();editorRange=null;}}
   updateComposer();
   if (!chatId || Date.now() - typingSent < 3000) return;
   typingSent = Date.now();
@@ -1153,7 +1355,7 @@ $('bcForm').addEventListener('submit', async e => {
     try {
       await fs.doc('chats/' + id).set({ members: [uid, peer].sort() }, { merge: true });
       const b = fs.batch();
-      b.set(fs.collection('chats/' + id + '/messages').doc(), { from: uid, ts, kind: 'text', text, broadcast: true });
+      b.set(fs.collection('chats/' + id + '/messages').doc(), { from: uid, ts, kind: 'text', text, broadcast: true, expiresAt: firebase.firestore.Timestamp.fromMillis(ts + MESSAGE_LIFETIME) });
       b.update(fs.doc('chats/' + id), { lastMsg: text.slice(0, 80), lastTs: ts, lastFrom: uid, lastKind: 'broadcast', ['read.' + uid]: ts });
       await b.commit(); ok++;
     } catch (err) { console.error(err); }
@@ -1165,3 +1367,4 @@ $('bcForm').addEventListener('submit', async e => {
 });
 
 boot();
+
