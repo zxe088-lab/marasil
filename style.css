@@ -279,10 +279,11 @@ form.composer .composer-face[aria-expanded="true"]{background:rgba(255,255,255,.
 .sticker-button .bb-sticker{--sticker-size:38px}
 .face-panel{grid-template-columns:repeat(6,1fr)}
 .round-sticker{clip-path:ellipse(48% 48% at 50% 50%)}
-.composer-write{flex:1;min-width:0;display:flex;flex-direction:column;background:white;border:1px solid #111;border-radius:2px}
-form.composer .composer-write input{width:100%;min-width:0;border:0;background:transparent}
-.sticker-draft{display:flex;align-items:center;gap:6px;padding:4px 8px}
+.composer-write{flex:1;min-width:0;display:flex;align-items:center;background:white;border:1px solid #111;border-radius:2px}
+form.composer .composer-write input{flex:1;width:0;min-width:0;border:0;background:transparent}
+.sticker-draft{display:flex;flex-shrink:0;align-items:center;gap:2px;padding:4px}
 .sticker-draft[hidden]{display:none}
 .sticker-draft .bb-sticker{--sticker-size:38px}
 .remove-sticker{border:0;background:transparent;color:#555;font-size:22px;padding:4px 8px}
-.sticker-caption{display:block;margin-top:3px}
+.sticker-message{display:flex;align-items:center;gap:8px;min-width:0}
+.sticker-caption{min-width:0;overflow-wrap:anywhere}

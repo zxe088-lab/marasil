@@ -1032,6 +1032,7 @@ function renderMsgs(fromMsgs){
     const txt = el('span', 'txt');
     if (m.broadcast) txt.append(el('span', 'bctag', '📢 بودكاست'));
     if (m.kind === 'sticker' && Number.isInteger(m.sticker) && m.sticker >= 0 && m.sticker < 48) {
+      txt.classList.add('sticker-message');
       txt.append(stickerFace(m.sticker));
       if (m.text && m.text !== 'ملصق بلاك بيري') txt.append(el('span', 'sticker-caption', m.text));
     }
