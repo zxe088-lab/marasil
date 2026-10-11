@@ -1,0 +1,39 @@
+name: Audit uploaded iOS interface
+on:
+  push:
+    branches: [fix/ios-keyboard-viewport]
+    paths: [.github/workflows/audit-ios.yml]
+permissions:
+  actions: read
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ios-build
+          run-id: 38100487498
+          github-token: ${{ github.token }}
+          path: artifact
+      - name: Inspect actual uploaded IPA
+        run: |
+          python3 - <<'PY'
+          import pathlib, zipfile, plistlib, json
+          ipa = next(pathlib.Path('artifact').rglob('*.ipa'))
+          with zipfile.ZipFile(ipa) as z:
+            names=z.namelist()
+            html=z.read(next(p for p in names if p.endswith('/public/index.html'))).decode()
+            css=z.read(next(p for p in names if p.endswith('/public/style.css'))).decode()
+            js=z.read(next(p for p in names if p.endswith('/public/app.js'))).decode()
+            config=json.loads(z.read(next(p for p in names if p.endswith('/capacitor.config.json'))))
+            plist=plistlib.loads(z.read(next(p for p in names if p.endswith('.app/Info.plist'))))
+            print('Build:',plist['CFBundleVersion'])
+            print('Capacitor config:',json.dumps(config))
+            print('Composer:',html[html.index('<form class="composer"'):html.index('<!-- نافذة -->')])
+            assert 'composer-send' in html and html.count('id="sendBtn"')==1
+            assert 'visualViewport' in js and 'offsetTop' in js
+            assert '.composer-send' in css
+            assert not config.get('server',{}).get('url')
+            print('PASS: uploaded IPA contains new single send button and viewport fix')
+          PY
