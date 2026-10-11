@@ -116,6 +116,11 @@ main>*{flex-shrink:0}
 form.composer{display:flex;gap:8px;align-items:center;padding:8px 10px;background:linear-gradient(#3a3f43,var(--dark1))}
 form.composer input{flex:1;border-radius:2px;border:1px solid #111;font-style:italic}
 form.composer .composer-send{order:-1}
+#s-chat .chat-header{display:flex;direction:rtl;flex-shrink:0;background:linear-gradient(var(--blue1),var(--blue2))}
+#s-chat .chat-header #chInfo{flex:1;min-width:0;width:auto;box-shadow:none}
+#s-chat .chat-back{flex:0 0 44px;align-self:stretch;border:0;padding:10px;background:transparent;color:#fff;display:grid;place-items:center}
+#s-chat .chat-back svg{width:24px;height:24px}
+#s-chat form.composer{padding-bottom:calc(8px + var(--bottom-inset))}
 form.composer .composer-ping{order:1;flex:0 0 44px;width:44px;min-height:44px;padding:2px;border:0;background:transparent;color:#ff6868;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11px}
 form.composer .composer-ping svg{width:24px;height:24px}
 form.composer input:not(:placeholder-shown){font-style:normal}
