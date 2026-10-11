@@ -48,7 +48,6 @@ const COUNTRIES = [
   ['YE','اليمن'],['IQ','العراق'],['JO','الأردن'],['EG','مصر'],['SY','سوريا'],['LB','لبنان'],
   ['PS','فلسطين'],['SD','السودان'],['LY','ليبيا'],['TN','تونس'],['DZ','الجزائر'],['MA','المغرب'],['','أخرى']
 ];
-const EMOJIS = '😊😄😁😂🤣😅😉😍😘🥰😋😜🤪😎🤩🥳😏😌🤔🤨😐😶🙄😴😢😭😤😡🤬😱😳🥺😇🤗🤭🤫👍👎👌✌️🤝🙏👏💪❤️💔💯🔥⭐🎉🌹☕🚗✈️🏕️⚽'.match(/\p{Extended_Pictographic}️?/gu);
 const DEFAULT_CAT = 'جهات الاتصال';
 const OWNER_UID = '7KzlcizFv8TrIeqRVqi6BjNoCue2';   // صاحب التطبيق: الوحيد اللي يقدر يغيّر رمز PIN
 const APP_NAME = 'BPB OLD';
@@ -960,7 +959,6 @@ async function openChat(peer){
   catch (e) { console.error(e); toast('ما قدرنا نفتح الدردشة'); return; }
   show('s-chat');
   chatId = id; chatPeer = peer; msgs = []; curChat = null; firstMsgsSnap = true;
-  $('emojiPanel').hidden = true;
   watchUser(peer); renderChatHead();
   $('msgList').replaceChildren(el('div', 'empty', 'جاري التحميل…'));
   unsubChat = fs.doc('chats/' + id).onSnapshot(s => { curChat = s.data() || {}; renderMsgs(); renderTyping(); });
@@ -984,7 +982,7 @@ function renderChatHead(){
   $('chStatus').className = 'st-icon' + (d.busy ? ' busy' : isOnline(chatPeer) ? '' : ' off');
   $('chMsg').textContent = d.msg || statusText(chatPeer);
   const b = isBlocked(chatPeer);
-  $('composer').hidden = b; $('pingBtn').hidden = b; updateComposer(); if (b) $('emojiPanel').hidden = true;
+  $('composer').hidden = b; $('pingBtn').hidden = b; updateComposer();
   $('blockedBar').hidden = !b;
 }
 $('chInfo').addEventListener('click', () => chatPeer && openProfile(chatPeer));
@@ -1075,8 +1073,6 @@ $('pingBtn').addEventListener('click', () => {
 });
 
 // الوجوه التعبيرية
-EMOJIS.forEach(e => { const b = el('button', '', e); b.type = 'button'; b.addEventListener('click', () => { const i = $('msgInput'); i.value += e; updateComposer(); i.focus({ preventScroll: true }); }); $('emojiPanel').append(b); });
-$('emojiBtn').addEventListener('click', () => { $('emojiPanel').hidden = !$('emojiPanel').hidden; const l = $('msgList'); l.scrollTop = l.scrollHeight; });
 updateComposer();
 
 boot();
