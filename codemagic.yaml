@@ -1,16 +1,17 @@
-# بناء تطبيق BPM old للآيفون على Codemagic ورفعه لـ TestFlight
+# Owner-approved internal TestFlight build from the GitHub keyboard fix branch.
 workflows:
   ios-release:
-    name: BPM old - iOS
+    name: BPB OLD - keyboard TestFlight internal
     instance_type: mac_mini_m2
     max_build_duration: 60
     integrations:
-      app_store_connect: BPM old API      # نفس الاسم اللي تعطيه للمفتاح في إعدادات Codemagic
+      app_store_connect: BPM old API
     environment:
       groups:
-        - ios_signing                     # فيها CERTIFICATE_PRIVATE_KEY
+        - ios_signing
       vars:
         BUNDLE_ID: com.zxe088.bpmold
+        APP_STORE_APPLE_ID: "6821347207"
         APP_NAME: BPM old
         XCODE_WORKSPACE: ios/App/App.xcworkspace
         XCODE_SCHEME: App
@@ -20,6 +21,8 @@ workflows:
     scripts:
       - name: Prepare web files
         script: |
+          [ "$CM_BRANCH" = "fix/ios-keyboard-viewport" ] || { echo "TestFlight workflow requires fix branch"; exit 1; }
+          node --test tests/viewport.test.cjs
           rm -rf www && mkdir -p www
           cp index.html app.js style.css firebase-config.js manifest.json icon-192.png icon-512.png www/
           for f in privacy.html terms.html; do [ -f "$f" ] && cp "$f" www/; done
@@ -58,8 +61,7 @@ workflows:
         script: |
           PLIST=ios/App/App/Info.plist
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString 1.1.0" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName $APP_NAME" "$PLIST" \
-            || /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string $APP_NAME" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName $APP_NAME" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string $APP_NAME" "$PLIST"
           /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" "$PLIST" || true
 
       - name: Restrict app to iPhone
@@ -81,12 +83,16 @@ workflows:
           keychain initialize
           app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_STORE --create
           keychain add-certificates
-          xcode-project use-profiles
+          xcode-project use-profiles --custom-export-options='{"testFlightInternalTestingOnly": true}'
 
       - name: Build number
         script: |
           cd ios/App
-          agvtool new-version -all $((BUILD_NUMBER + 1))
+          LATEST_TESTFLIGHT_BUILD=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" --pre-release-version "1.1.0")
+          case "$LATEST_TESTFLIGHT_BUILD" in ""|*[!0-9]*) echo "Invalid TestFlight build number"; exit 1 ;; esac
+          NEXT_TEST_BUILD=$((LATEST_TESTFLIGHT_BUILD + 1))
+          if [ "$NEXT_TEST_BUILD" -le "$BUILD_NUMBER" ]; then NEXT_TEST_BUILD=$((BUILD_NUMBER + 1)); fi
+          agvtool new-version -all "$NEXT_TEST_BUILD"
 
       - name: Build ipa
         script: |
@@ -96,6 +102,10 @@ workflows:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
 
-    # Review branch: build artifacts only. Restore Apple publishing only after
-    # explicit approval; do not replace the version currently under review.
-
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: false # Upload for internal testing, no external beta review.
+        submit_to_app_store: false
+        cancel_previous_submissions: false
+        expire_build_submitted_for_review: false
