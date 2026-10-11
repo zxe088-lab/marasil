@@ -93,3 +93,18 @@ test('browser toolbar changes without a focused input keep the bottom safe area'
   s.events['viewport:resize'](); s.flush();
   assert.equal(s.classes['keyboard-open'], false);
 });
+
+test('native will-show moves the composer before delayed WebView resize without double subtraction', () => {
+  const s = setup({ focused: true });
+  s.events.keyboardWillShow({ detail: { keyboardHeight: 350 } });
+  assert.equal(s.values['--app-height'], '450px');
+  assert.equal(s.classes['keyboard-open'], true);
+  s.window.innerHeight = s.window.visualViewport.height = 450;
+  s.events.resize(); s.flush();
+  assert.equal(s.values['--app-height'], '450px');
+  s.events.keyboardWillShow({ keyboardHeight: 400 });
+  assert.equal(s.values['--app-height'], '400px');
+  s.window.innerHeight = s.window.visualViewport.height = 800;
+  s.events.keyboardDidHide(); s.flush();
+  assert.equal(s.values['--app-height'], '800px');
+});
