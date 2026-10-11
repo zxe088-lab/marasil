@@ -52,27 +52,34 @@ async function frame(page){
     assert.equal(await page.locator('#voiceSendBtn').getAttribute('aria-label'), 'إرسال');
     await input.press('Enter');
     assert.deepEqual(await page.evaluate(() => window.sent), [{ kind: 'text', text: 'رسالة بلوحة المفاتيح' }], 'Enter sends once');
-    assert.equal(await input.inputValue(), '');
+    assert.equal(await page.evaluate(() => partsText(editorParts())), '');
     await face.tap();
     assert.equal(await panel.isVisible(), true, 'Face button opens faces');
     await panel.locator('.face:not(.sticker-button)').first().tap();
-    assert.equal(await input.inputValue(), '🙂', 'Tapping a face inserts it');
+    assert.equal(await page.evaluate(() => partsText(editorParts())), '🙂', 'Tapping a face inserts it');
     await input.press('Enter');
     assert.equal(await page.evaluate(() => window.sent[1].text), '🙂');
     assert.equal(await panel.locator('.sticker-button').count(), 48);
     await panel.locator('.sticker-button').first().tap();
     assert.equal(await page.evaluate(() => window.sent.length), 2, 'Selecting sticker does not send');
-    assert.equal(await page.locator('#stickerDraft').isVisible(), true);
-    await input.fill('مع الملصق');
+    assert.equal(await input.locator('[data-sticker]').count(),1);
+    assert.equal(await input.locator('[data-sticker]').evaluate(node=>node.getBoundingClientRect().width),22);
+    await input.press('Backspace');
+    assert.equal(await input.locator('[data-sticker]').count(),0,'Backspace deletes a face like one character');
+    await input.fill('خالد ');
+    await panel.locator('.sticker-button').first().tap();
+    await input.pressSequentially(' كيفك');
+    assert.deepEqual(await page.evaluate(() => editorParts()),[{text:'خالد '},{sticker:0},{text:' كيفك'}],'Text can continue after inline face');
     await input.press('Enter');
-    assert.deepEqual(await page.evaluate(() => window.sent[2]), {kind:'sticker',sticker:0,text:'مع الملصق'});
-    assert.equal(await page.locator('#stickerDraft').isVisible(), false);
+    assert.deepEqual(await page.evaluate(() => window.sent[2]), {kind:'richtext',text:'خالد ☺ كيفك',parts:[{text:'خالد '},{sticker:0},{text:' كيفك'}]});
+    assert.equal(await input.locator('[data-sticker]').count(),0);
     await face.tap();
     assert.equal(await panel.isVisible(), false, 'Face button closes faces');
     assert.equal(await page.locator('#pingBtn').isVisible(), true, 'Ping is retained');
-    await input.fill('اختبار لوحة المفاتيح');
+    await input.fill('خالد ');
     await face.tap();
     await panel.locator('.sticker-button').first().tap();
+    await input.pressSequentially(' كيفك');
     for (const width of [390, 320]) {
       await page.setViewportSize({ width, height: 844 });
       for (const [height, top, native] of [[844,0,false],[440,64,false],[410,105,false],[450,0,true]]) {
@@ -118,7 +125,7 @@ async function frame(page){
     assert.equal(await page.locator('#onceImage').getAttribute('src'),null,'Closing clears image from viewer');
     await page.evaluate(() => openOncePhoto('demo','photo',document.createElement('button')));
     assert.equal(await page.locator('#onceViewer').isVisible(),false,'Consumed photo cannot reopen');
-    await page.evaluate(() => {clearDraftSticker();document.getElementById('msgInput').value='';updateComposer();});
+    await page.evaluate(() => {clearDraftSticker();updateComposer();});
     await page.evaluate(() => {
       window.trackStopped=false;
       Object.defineProperty(navigator,'mediaDevices',{value:{getUserMedia:async()=>({getTracks:()=>[{stop:()=>window.trackStopped=true}]})},configurable:true});
