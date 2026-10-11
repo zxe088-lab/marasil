@@ -13,7 +13,7 @@
 <link rel="manifest" href="manifest.json">
 <title>BPB OLD</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=16">
+<link rel="stylesheet" href="style.css?v=21">
 </head>
 <body>
 <!-- أيقونات -->
@@ -82,8 +82,8 @@
   </div>
 
   <!-- إضافة جهة اتصال -->
-  <div id="s-add" class="view" hidden>
-    <div class="bluebar plain"><span class="bb-title">إضافة جهة اتصال</span></div>
+  <div id="s-add" class="view no-actions" hidden>
+    <div class="bluebar plain"><span class="bb-title">إضافة جهة اتصال</span><button type="button" class="top-back" data-back aria-label="رجوع"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M15 4l-8 8 8 8" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
     <form class="panel" id="addForm">
       <div class="card">
         <label class="lbl" for="addPin">رمز PIN:</label>
@@ -94,12 +94,11 @@
       <button type="submit" class="btn primary">إرسال دعوة وإضافة</button>
     </form>
     <div class="spacer"></div>
-    <nav class="actionbar"><button type="button" data-back><svg><use href="#i-back"/></svg><span>رجوع</span></button></nav>
   </div>
 
   <!-- بودكاست (Broadcast) -->
-  <div id="s-broadcast" class="view" hidden>
-    <div class="bluebar plain"><span class="bb-title" id="bcTitle">📢 بودكاست</span></div>
+  <div id="s-broadcast" class="view no-actions" hidden>
+    <div class="bluebar plain"><span class="bb-title" id="bcTitle">📢 بودكاست</span><button type="button" class="top-back" data-back aria-label="رجوع"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M15 4l-8 8 8 8" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
     <form class="scroll graybg" id="bcForm">
       <div class="card">
         <label class="lbl" for="bcText">الرسالة:</label>
@@ -111,12 +110,11 @@
       </div>
       <div class="actions"><button type="submit" class="btn primary" id="bcSend">📢 إرسال</button></div>
     </form>
-    <nav class="actionbar"><button type="button" data-back><svg><use href="#i-back"/></svg><span>رجوع</span></button></nav>
   </div>
 
   <!-- تعديل القائمة -->
-  <div id="s-menu" class="view" hidden>
-    <div class="bluebar plain"><span class="bb-title">تعديل القائمة</span></div>
+  <div id="s-menu" class="view no-actions" hidden>
+    <div class="bluebar plain"><span class="bb-title">تعديل القائمة</span><button type="button" class="top-back" data-back aria-label="رجوع"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M15 4l-8 8 8 8" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
     <div class="scroll graybg">
       <div class="card">
         <div class="hint">غيّر أسماء القائمة وزخرفها بالرموز والإيموجي كما تحب، ورتّبها بالأسهم، وأخفِ ما لا تحتاجه.</div>
@@ -131,27 +129,36 @@
         <button type="button" class="btn" id="menuReset">إرجاع الشكل الافتراضي</button>
       </div>
     </div>
-    <nav class="actionbar"><button type="button" data-back><svg><use href="#i-back"/></svg><span>رجوع</span></button></nav>
   </div>
 
   <!-- ملف التعريف -->
-  <div id="s-profile" class="view" hidden>
-    <div class="bluebar plain"><span class="bb-title" id="pfTitle">ملف تعريف جهة الاتصال</span></div>
+  <div id="s-profile" class="view no-actions" hidden>
+    <div class="bluebar plain"><span class="bb-title" id="pfTitle">ملف تعريف جهة الاتصال</span><button type="button" class="top-back" data-back aria-label="رجوع"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M15 4l-8 8 8 8" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
     <div class="scroll graybg">
       <div class="card">
         <div class="pf-top">
-          <div class="pf-photo"><span id="pfAvatar"></span><span class="pf-pin pin" id="pfPinSmall"></span></div>
+          <div class="pf-photo"><span id="pfAvatar"></span><span class="pf-pin pin" id="pfPinSmall"></span><input type="file" id="photoInput" accept="image/*" hidden></div>
           <div class="pf-fields"><div class="lbl">اسم العرض:</div><div class="box" id="pfName"></div></div>
         </div>
         <div class="kv spread"><span class="lbl">رمز PIN:</span><span class="pin val" id="pfPin"></span></div>
         <div class="kv spread"><span class="lbl">رمز PIN الشريطي:</span><button type="button" class="btn sm" id="pfBarcodeBtn">إظهار</button></div>
         <div class="barcode" id="pfBarcode" hidden></div>
         <div class="lbl">رسالة شخصية:</div>
-        <div class="box soft" id="pfMsg"></div>
-        <div class="kv"><span class="lbl">الحالة:</span><span class="val" id="pfStatus"></span></div>
+        <div class="box soft other-only" id="pfMsg"></div>
+        <input id="edMsg" class="mine-only" maxlength="120" placeholder="اكتب رسالتك الشخصية">
+        <div class="kv"><span class="lbl">الحالة:</span><span class="val other-only" id="pfStatus"></span></div>
+        <div class="mine-only">
+          <div class="row2">
+            <button type="button" class="btn" id="setAvail"><span class="st-icon"></span> متوفر</button>
+            <button type="button" class="btn" id="setBusy"><span class="st-icon busy"></span> مشغول</button>
+          </div>
+          <div id="customStatusList" class="stlist"></div>
+          <div class="line"><input id="stNew" maxlength="30" placeholder="حالة مخصصة: مثل 🌙 نايم أو في الدوام" autocomplete="off"><select id="stNewType"><option value="0">🟢</option><option value="1">🔴</option></select><button type="button" class="btn" id="stAdd">إضافة</button></div>
+        </div>
         <div class="loc">
           <div class="lbl">موقع:</div>
-          <div class="kv"><span class="flag" id="pfFlag"></span></div>
+          <div class="kv other-only"><span class="flag" id="pfFlag"></span></div>
+          <select id="edCountry" class="mine-only" aria-label="الدولة"></select>
           <div class="kv"><span class="lbl">المنطقة الزمنية:</span><span class="val" id="pfTz"></span></div>
           <div class="kv"><span class="lbl">التوقيت المحلي:</span><span class="val" id="pfTime"></span></div>
         </div>
@@ -175,6 +182,7 @@
           <div class="lbl">الحساب</div>
           <div class="hint" id="accState"></div>
           <button type="button" class="btn primary" id="linkGoogleBtn">ربط حسابي بقوقل</button>
+          <button type="button" class="btn" id="photoDel">إزالة صورة العرض</button>
           <button type="button" class="btn danger" id="signOutBtn">تسجيل خروج</button>
           <button type="button" class="btn danger" id="deleteAccBtn">حذف الحساب</button>
           <div class="links">
@@ -183,32 +191,11 @@
           </div>
         </div>
         <div class="card">
-          <div class="row2">
-            <button type="button" class="btn" id="photoBtn">تغيير صورة العرض</button>
-            <button type="button" class="btn" id="photoDel">إزالة</button>
-          </div>
-          <input type="file" id="photoInput" accept="image/*" hidden>
-          <label class="lbl" for="edName">اسم العرض:</label>
-          <input id="edName" maxlength="40">
-          <label class="lbl" for="edMsg">رسالة شخصية:</label>
-          <input id="edMsg" maxlength="120" placeholder="اكتب رسالتك الشخصية">
-          <label class="lbl">الحالة:</label>
-          <div class="row2">
-            <button type="button" class="btn" id="setAvail"><span class="st-icon"></span> متوفر</button>
-            <button type="button" class="btn" id="setBusy"><span class="st-icon busy"></span> مشغول</button>
-          </div>
-          <div id="customStatusList" class="stlist"></div>
-          <div class="line"><input id="stNew" maxlength="30" placeholder="حالة مخصصة: مثل 🌙 نايم أو في الدوام" autocomplete="off"><select id="stNewType"><option value="0">🟢</option><option value="1">🔴</option></select><button type="button" class="btn" id="stAdd">إضافة</button></div>
-          <label class="lbl" for="edCountry">الدولة:</label>
-          <select id="edCountry"></select>
-          <label class="check"><input type="checkbox" id="edMute"> كتم النغمات</label>
-        </div>
-        <div class="card">
           <div class="lbl">النغمات</div>
           <div class="hint">اختر ملف صوت من جوالك لكل نغمة. النغمة تنحفظ في جهازك أنت فقط.</div>
           <div id="toneList"></div>
+          <label class="check"><input type="checkbox" id="edMute"> كتم النغمات</label>
         </div>
-        <button type="button" class="btn primary" id="edSave">حفظ</button>
         <button type="button" class="btn" id="copyPin">نسخ رمز PIN</button>
         <div class="card" id="pinAdminCard" hidden>
           <div class="lbl">تغيير رمز PIN 👑</div>
@@ -218,7 +205,6 @@
         </div>
       </div>
     </div>
-    <nav class="actionbar"><button type="button" data-back><svg><use href="#i-back"/></svg><span>رجوع</span></button></nav>
   </div>
 
   <!-- الدردشة -->
@@ -264,6 +250,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="app.js?v=16"></script>
+<script src="app.js?v=20"></script>
 </body>
 </html>
