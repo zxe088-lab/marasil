@@ -324,3 +324,4 @@ form.composer .composer-write input{flex:1;width:0;min-width:0;border:0;backgrou
 }
 
 
+#meEdit .acc-id #accId{font-family:ui-monospace,Menlo,monospace;font-size:11px;direction:ltr;word-break:break-all}
