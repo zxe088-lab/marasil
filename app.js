@@ -985,7 +985,7 @@ async function openChat(peer){
       renderMsgs(true);
     });
 }
-function closeChat(){ toggleFaces(false); unsubMsgs?.(); unsubChat?.(); unsubMsgs = unsubChat = null; chatId = chatPeer = null; }
+function closeChat(){ clearDraftSticker(); toggleFaces(false); unsubMsgs?.(); unsubChat?.(); unsubMsgs = unsubChat = null; chatId = chatPeer = null; }
 function renderChatHead(){
   if (!chatPeer) return;
   const d = users[chatPeer] || {};
@@ -1031,7 +1031,10 @@ function renderMsgs(fromMsgs){
     else { mark = el('span', 'mark d', 'D'); mark.title = 'تم التسليم'; }
     const txt = el('span', 'txt');
     if (m.broadcast) txt.append(el('span', 'bctag', '📢 بودكاست'));
-    if (m.kind === 'sticker' && Number.isInteger(m.sticker) && m.sticker >= 0 && m.sticker < 48) txt.append(stickerFace(m.sticker));
+    if (m.kind === 'sticker' && Number.isInteger(m.sticker) && m.sticker >= 0 && m.sticker < 48) {
+      txt.append(stickerFace(m.sticker));
+      if (m.text && m.text !== 'ملصق بلاك بيري') txt.append(el('span', 'sticker-caption', m.text));
+    }
     else txt.append(m.text || '');
     line.append(mark, txt);
     card.firstChild.append(line);
@@ -1064,13 +1067,25 @@ async function sendMsg(data){
   try { await b.commit(); if (data.kind === 'ping') { play('ping'); shake(); } else play('sent'); }
   catch (e) { console.error(e); toast('ما وصلت الرسالة، تأكد من الاتصال'); }
 }
+let draftSticker = null;
+function clearDraftSticker(){ draftSticker = null; $('stickerDraft')?.replaceChildren(); if ($('stickerDraft')) $('stickerDraft').hidden = true; }
+function selectSticker(index){
+  if ($('composer').hidden) return;
+  draftSticker = index;
+  const draft = $('stickerDraft');
+  const remove = el('button', 'remove-sticker', '×'); remove.type = 'button'; remove.setAttribute('aria-label', 'إزالة الملصق');
+  remove.onclick = clearDraftSticker;
+  draft.replaceChildren(stickerFace(index), remove); draft.hidden = false;
+  $('msgInput').focus({preventScroll:true});
+}
 function updateComposer(){
-  if ($('composer').hidden) toggleFaces(false);
+  if ($('composer').hidden) { toggleFaces(false); clearDraftSticker(); }
 }
 function sendText(){
   const input = $('msgInput');
-  const text = input.value.trim(); if (!text || $('composer').hidden) return;
-  input.value = ''; updateComposer(); sendMsg({ kind: 'text', text });
+  const text = input.value.trim(); if ((!text && draftSticker == null) || $('composer').hidden) return;
+  const data = draftSticker == null ? {kind:'text', text} : {kind:'sticker', sticker:draftSticker, text};
+  input.value = ''; clearDraftSticker(); updateComposer(); sendMsg(data);
   input.focus({ preventScroll: true });
 }
 $('composer').addEventListener('submit', e => { e.preventDefault(); sendText(); });
@@ -1093,7 +1108,7 @@ function toggleFaces(open){
       b.setAttribute('aria-label', 'إرسال ملصق بلاك بيري ' + (index + 1));
       b.append(stickerFace(index));
       b.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') e.preventDefault(); });
-      b.addEventListener('click', () => { if (!$('composer').hidden) sendMsg({kind: 'sticker', sticker: index, text: 'ملصق بلاك بيري'}); });
+      b.addEventListener('click', () => selectSticker(index));
       p.append(b);
     }
     FACES.forEach(f => {

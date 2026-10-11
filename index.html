@@ -228,7 +228,10 @@
     <div class="face-panel" id="facePanel" hidden></div>
     <form class="composer" id="composer">
       <button type="button" id="pingBtn" class="composer-ping" aria-label="وكز"><svg aria-hidden="true"><use href="#i-ping"/></svg><span>وكز</span></button>
-      <input id="msgInput" maxlength="2000" placeholder="أدخل رسالة" aria-label="الرسالة" autocomplete="off" enterkeyhint="send">
+      <div class="composer-write">
+        <div id="stickerDraft" class="sticker-draft" aria-label="الملصق المختار" aria-live="polite" hidden></div>
+        <input id="msgInput" maxlength="2000" placeholder="أدخل رسالة" aria-label="الرسالة" autocomplete="off" enterkeyhint="send">
+      </div>
       <button type="button" id="faceBtn" class="composer-face" aria-label="الوجوه" aria-expanded="false" aria-controls="facePanel"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#ffd21f" stroke="#a87400" stroke-width="1.2"/><circle cx="8.6" cy="9.6" r="1.4" fill="#3a2a00"/><circle cx="15.4" cy="9.6" r="1.4" fill="#3a2a00"/><path d="M7.5 14c1.2 2 2.7 3 4.5 3s3.3-1 4.5-3" fill="none" stroke="#3a2a00" stroke-width="1.6" stroke-linecap="round"/></svg></button>
     </form>
   </div>
