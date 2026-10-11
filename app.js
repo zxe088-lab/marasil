@@ -3,15 +3,17 @@
 
 const $ = id => document.getElementById(id);
 // One layout owner: follow the visible viewport, including Safari's focus pan.
-// Capacitor resizes the native WebView; never subtract keyboardHeight again.
-let viewportFrame = 0, nativeKeyboardOpen = false;
+// Predict the native keyboard inset at will-show; cap the viewport instead of subtracting twice.
+let viewportFrame = 0, nativeKeyboardOpen = false, nativeKeyboardTarget = null, closedViewportHeight = window.innerHeight;
 function syncViewport(){
   const viewport = window.visualViewport;
   if (viewport && Math.abs(viewport.scale - 1) > 0.01) return;
   const root = document.documentElement;
-  const height = viewport?.height ?? window.innerHeight;
+  let height = viewport?.height ?? window.innerHeight;
   const top = Math.max(0, viewport?.offsetTop ?? 0);
   if (height <= 0) return; // Ignore transient measurements during rotation.
+  if (!nativeKeyboardOpen) closedViewportHeight = window.innerHeight;
+  if (nativeKeyboardOpen && nativeKeyboardTarget !== null) height = Math.min(height, nativeKeyboardTarget);
   const inputFocused = document.activeElement?.matches('input,textarea,[contenteditable="true"]');
   const keyboardOpen = nativeKeyboardOpen ||
     (inputFocused && window.innerHeight - height - top > 80);
@@ -37,10 +39,16 @@ document.addEventListener('visibilitychange', scheduleViewport);
 document.addEventListener('focusin', scheduleViewport);
 document.addEventListener('focusout', scheduleViewport);
 // Keyboard plugin also emits these compatibility events on window.
-window.addEventListener('keyboardWillShow', () => { nativeKeyboardOpen = true; scheduleViewport(); });
+window.addEventListener('keyboardWillShow', event => {
+  const keyboardHeight = Number(event?.keyboardHeight ?? event?.detail?.keyboardHeight);
+  if (!nativeKeyboardOpen) closedViewportHeight = window.innerHeight;
+  nativeKeyboardOpen = true;
+  nativeKeyboardTarget = Number.isFinite(keyboardHeight) && keyboardHeight > 0 && keyboardHeight < closedViewportHeight ? closedViewportHeight - keyboardHeight : null;
+  syncViewport();
+});
 window.addEventListener('keyboardDidShow', scheduleViewport);
 window.addEventListener('keyboardWillHide', scheduleViewport);
-window.addEventListener('keyboardDidHide', () => { nativeKeyboardOpen = false; scheduleViewport(); });
+window.addEventListener('keyboardDidHide', () => { nativeKeyboardOpen = false; nativeKeyboardTarget = null; scheduleViewport(); });
 syncViewport();
 const COLORS = ['#c0392b','#2e86c1','#239b56','#b9770e','#7d3c98','#148f77','#a04000','#2c3e8f'];
 const COUNTRIES = [
@@ -1359,3 +1367,4 @@ $('bcForm').addEventListener('submit', async e => {
 });
 
 boot();
+
