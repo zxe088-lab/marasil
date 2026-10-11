@@ -100,7 +100,7 @@ jobs:
           keychain initialize
           app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_STORE --create
           keychain add-certificates
-          xcode-project use-profiles --custom-export-options='{"testFlightInternalTestingOnly": true}'
+          xcode-project use-profiles
 
       - name: Build number
         run: |
@@ -112,7 +112,7 @@ jobs:
         run: |
           xcode-project build-ipa --workspace "$XCODE_WORKSPACE" --scheme "$XCODE_SCHEME"
 
-      - name: Upload to TestFlight (internal testing)
+      - name: Upload to Apple for TestFlight and App Store
         run: |
           app-store-connect publish --path build/ios/ipa/*.ipa
 
