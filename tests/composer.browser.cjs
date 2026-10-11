@@ -31,7 +31,7 @@ async function frame(page){
 }
 (async () => {
   fs.mkdirSync(path.join(root, 'browser-results'), { recursive: true });
-  const browser = await chromium.launch();
+  const browser = await chromium.launch(process.env.TEST_BROWSER_PATH ? {executablePath:process.env.TEST_BROWSER_PATH} : {});
   try {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
     const page = await context.newPage();
@@ -51,10 +51,13 @@ async function frame(page){
     assert.equal(await input.inputValue(), '');
     await face.tap();
     assert.equal(await panel.isVisible(), true, 'Face button opens faces');
-    await panel.locator('.face').first().tap();
+    await panel.locator('.face:not(.sticker-button)').first().tap();
     assert.equal(await input.inputValue(), '🙂', 'Tapping a face inserts it');
     await input.press('Enter');
     assert.equal(await page.evaluate(() => window.sent[1].text), '🙂');
+    assert.equal(await panel.locator('.sticker-button').count(), 48);
+    await panel.locator('.sticker-button').first().tap();
+    assert.deepEqual(await page.evaluate(() => window.sent[2]), {kind:'sticker',sticker:0,text:'ملصق بلاك بيري'});
     await face.tap();
     assert.equal(await panel.isVisible(), false, 'Face button closes faces');
     assert.equal(await page.locator('#pingBtn').isVisible(), true, 'Ping is retained');
@@ -87,7 +90,7 @@ async function frame(page){
     }
     await page.evaluate(() => {document.getElementById('composer').hidden=true;updateComposer();});
     await page.evaluate(() => sendText());
-    assert.equal(await page.evaluate(() => window.sent.length), 2, 'Blocked composer cannot send');
+    assert.equal(await page.evaluate(() => window.sent.length), 3, 'Blocked composer cannot send');
     assert.deepEqual(errors, []);
     console.log('PASS face picker, Enter send exactly once, focus, blocked composer and Ping retained');
   } finally { await browser.close(); }
