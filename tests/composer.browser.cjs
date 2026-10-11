@@ -76,7 +76,7 @@ async function frame(page){
         const layout = await page.evaluate(() => {
           const rect = id => {const r=document.getElementById(id).getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height};};
           const buttonStyle = getComputedStyle(document.getElementById('sendBtn'));
-          return {app:rect('app'),input:rect('msgInput'),send:rect('sendBtn'),ping:rect('pingBtn'),list:rect('msgList'),
+          return {app:rect('app'),input:rect('msgInput'),send:rect('sendBtn'),emoji:rect('emojiBtn'),ping:rect('pingBtn'),list:rect('msgList'),
             rootScroll:document.scrollingElement.scrollHeight-document.scrollingElement.clientHeight,
             background:buttonStyle.backgroundColor,color:buttonStyle.color,radius:buttonStyle.borderRadius};
         });
@@ -84,7 +84,8 @@ async function frame(page){
         assert.equal(layout.send.width, 44); assert.equal(layout.send.height, 44);
         assert.equal(layout.background, 'rgb(255, 255, 255)'); assert.equal(layout.color, 'rgb(0, 0, 0)');
         assert.equal(layout.radius, '50%');
-        assert.ok(layout.send.right <= layout.input.left && layout.input.left - layout.send.right <= 9, 'Send sits beside input');
+        assert.ok(layout.send.left >= layout.input.right && layout.send.left - layout.input.right <= 9, 'Send sits right of input');
+        assert.ok(layout.emoji.right <= layout.input.left, 'Emoji sits left of input');
         assert.ok(layout.send.bottom <= top+height && layout.ping.bottom <= top+height);
         assert.ok(layout.input.bottom <= top+height && layout.list.height > 0);
         assert.equal(layout.rootScroll, 0, 'No document scroll');
