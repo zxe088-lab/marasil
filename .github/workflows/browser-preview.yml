@@ -1,0 +1,32 @@
+name: Composer browser checks
+on:
+  push:
+    branches:
+      - fix/ios-keyboard-viewport
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Test viewport controller
+        run: node --test tests/viewport.test.cjs
+      - name: Install browser test runtime
+        run: |
+          npm install --no-save --ignore-scripts playwright
+          npx playwright install --with-deps chromium
+      - name: Test composer in browser
+        run: node tests/composer.browser.cjs
+      - name: Save browser screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: composer-browser-preview
+          path: browser-results/*.png
+          if-no-files-found: ignore
