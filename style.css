@@ -325,3 +325,9 @@ form.composer .composer-write input{flex:1;width:0;min-width:0;border:0;backgrou
 
 
 #meEdit .acc-id #accId{font-family:ui-monospace,Menlo,monospace;font-size:11px;direction:ltr;word-break:break-all}
+/* طلبات الانضمام */
+.setup-wait{background:#fff;border:1px solid #c9d2d9;border-radius:6px;padding:14px;text-align:center;line-height:1.7}
+#joinReqCard .join-row{padding:8px 0;border-top:1px solid #e3e6e8}
+#joinReqCard .join-row .line{display:flex;gap:6px;margin-top:6px}
+#joinReqCard .join-row .pininput{flex:1;min-width:0}
+#s-home .join-banner{background:linear-gradient(#fff4c2,#ffe082);color:#5a4100;font-weight:700}

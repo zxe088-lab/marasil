@@ -49,10 +49,13 @@
   <section id="s-setup" class="screen" hidden>
     <div class="setup-icon"><svg><use href="#i-chats"/></svg></div>
     <h1>أهلاً في BPB OLD</h1>
-    <p>اكتب اسم العرض حقك، وبيطلع لك رمز PIN خاص. أصحابك يضيفونك فيه بدل رقم جوالك.</p>
+    <p id="setupIntro">اكتب اسم العرض حقك وأرسل طلب انضمام. بعد موافقة المالك يوصلك رمز PIN خاص، وأصحابك يضيفونك فيه بدل رقم جوالك.</p>
+    <div id="setupForm">
     <input id="setupName" maxlength="40" placeholder="اسم العرض" autocomplete="off">
     <label class="check agree"><input type="checkbox" id="agreeTerms"> أوافق على <a href="https://zxe088-lab.github.io/marasil/terms.html" target="_blank" rel="noopener">شروط الاستخدام</a> و<a href="https://zxe088-lab.github.io/marasil/privacy.html" target="_blank" rel="noopener">سياسة الخصوصية</a></label>
-    <button type="button" class="btn primary" id="setupBtn">ابدأ</button>
+    <button type="button" class="btn primary" id="setupBtn">إرسال طلب الانضمام</button>
+    </div>
+    <div id="setupWait" class="setup-wait" hidden><p id="setupWaitText"></p><button type="button" class="btn" id="setupRetry" hidden>إرسال طلب جديد</button></div>
   </section>
 
   <!-- الرئيسية -->
@@ -67,6 +70,7 @@
     </button>
 
     <div class="classic-menu scroll">
+<button type="button" class="classic-edit join-banner" id="joinReqBtn" hidden>👑 طلبات انضمام جديدة <span id="joinReqCount"></span></button>
 <button type="button" class="classic-category" data-section="chats" aria-expanded="false" aria-controls="t-chats"><span><span class="cl">الدردشات</span> <span id="classicChatsCount">(0)</span></span><span class="category-toggle">+</span></button><div class="classic-panel" id="t-chats" hidden><div class="scroll" id="chatList"></div></div>
 <button type="button" class="classic-category" data-section="updates" aria-expanded="false" aria-controls="t-updates"><span><span class="cl">التحديثات</span> <span id="classicUpdatesCount">(0)</span></span><span class="category-toggle">+</span></button><div class="classic-panel" id="t-updates" hidden><div class="scroll" id="updatesList"></div></div>
 <button type="button" class="classic-category" data-section="contacts" aria-expanded="false" aria-controls="t-contacts"><span><span class="cl">الأسماء</span> <span id="classicNamesCount">(0)</span></span><span class="category-toggle">+</span></button><div class="classic-panel" id="t-contacts" hidden><div class="searchbox"><input id="search" placeholder="بحث في الأسماء" autocomplete="off"></div><div class="scroll" id="contactList"></div></div>
@@ -198,6 +202,11 @@
           <label class="check"><input type="checkbox" id="edMute"> كتم النغمات</label>
         </div>
         <button type="button" class="btn" id="copyPin">نسخ رمز PIN</button>
+        <div class="card" id="joinReqCard" hidden>
+          <div class="lbl">طلبات الانضمام 👑</div>
+          <div class="hint">حدّد رمز PIN لكل شخص ثم اضغط قبول. ما أحد يدخل التطبيق إلا بموافقتك.</div>
+          <div id="joinReqList"></div>
+        </div>
         <div class="card" id="pinAdminCard" hidden>
           <div class="lbl">تغيير رمز PIN 👑</div>
           <div class="hint">أصحابك المضافين يبقون عندك. الرمز القديم يتوقف، وأي أحد جديد يضيفك بالرمز الجديد.</div>

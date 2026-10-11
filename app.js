@@ -399,11 +399,12 @@ function start(id){
   if (uid) return; uid = id;
   fs.doc('users/' + uid).onSnapshot(s => {
     const had = !!me; me = s.exists ? s.data() : null;
-    if (!me) { show('s-setup', false); return; }
+    if (!me) { show('s-setup', false); watchMyJoin(); return; }
     if (!had) {
       show('s-home', false); listen(); heartbeat();
       // ميزة تغيير الرمز لصاحب التطبيق فقط (مسجّل في مجموعة admins)
       $('pinAdminCard').hidden = !isOwner(uid);
+      if (isOwner(uid)) watchJoinRequests();
     }
     renderHomeSoon(); if (profileId === uid && !$('s-profile').hidden) renderProfile();
   }, err => { $('errText').textContent = 'ما عندك صلاحية. تأكد من نسخ قواعد الأمان (firestore.rules) في Firebase.'; show('s-error'); console.error(err); });
@@ -415,11 +416,15 @@ $('setupBtn').addEventListener('click', async () => {
   if (!$('agreeTerms').checked) { toast('لازم توافق على شروط الاستخدام'); return; }
   $('setupBtn').disabled = true;
   try {
-    let pin;
-    for (let i = 0; i < 5; i++) { pin = newPin(); if (!(await fs.doc('pins/' + pin).get()).exists) break; }
-    await fs.doc('pins/' + pin).set({ uid });
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
-    await fs.doc('users/' + uid).set({ name, pin, msg: '', busy: false, photo: '', country: tz === 'Asia/Riyadh' ? 'SA' : '', tz, cats: [DEFAULT_CAT], mute: false, lastSeen: Date.now(), updatedAt: Date.now(), change: 'join' });
+    if (isOwner(uid)) {
+      let pin;
+      for (let i = 0; i < 5; i++) { pin = newPin(); if (!(await fs.doc('pins/' + pin).get()).exists) break; }
+      await fs.doc('pins/' + pin).set({ uid });
+      await createMe(name, pin);
+    } else {
+      // طلب انضمام: المالك يوافق ويحدد رمز PIN
+      await fs.doc('joinRequests/' + uid).set({ name, at: Date.now(), status: 'pending' });
+    }
   } catch (e) { console.error(e); toast('صار خطأ، جرّب مرة ثانية'); }
   $('setupBtn').disabled = false;
 });
@@ -1370,6 +1375,87 @@ $('bcForm').addEventListener('submit', async e => {
 });
 
 $('accIdCopy').addEventListener('click', async () => { const t = $('accId').textContent; try { await navigator.clipboard.writeText(t); toast('تم نسخ معرّف الحساب'); } catch { toast(t); } });
+
+async function createMe(name, pin){
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+  await fs.doc('users/' + uid).set({ name, pin, msg: '', busy: false, photo: '', country: tz === 'Asia/Riyadh' ? 'SA' : '', tz, cats: [DEFAULT_CAT], mute: false, lastSeen: Date.now(), updatedAt: Date.now(), change: 'join' });
+}
+
+/* ---------- طلبات الانضمام: المستخدم يطلب، والمالك يوافق ويحدد رمز PIN ---------- */
+let myJoinUnsub = null, creatingMe = false;
+function setupState(form, text, retry){
+  $('setupForm').hidden = !form; $('setupWait').hidden = form;
+  $('setupWaitText').textContent = text || ''; $('setupRetry').hidden = !retry;
+}
+function watchMyJoin(){
+  if (myJoinUnsub || isOwner(uid)) { setupState(true); return; }
+  myJoinUnsub = fs.doc('joinRequests/' + uid).onSnapshot(async s => {
+    const r = s.exists ? s.data() : null;
+    if (!r) { setupState(true); return; }
+    if (r.status === 'pending') { setupState(false, '⏳ طلبك وصل للمالك باسم «' + (r.name || '') + '». أول ما يوافق بيوصلك رمز PIN وتدخل التطبيق تلقائياً.'); return; }
+    if (r.status === 'rejected') { setupState(false, 'للأسف انرفض طلب الانضمام.', true); return; }
+    if (r.status === 'approved' && r.pin && !me && !creatingMe) {
+      creatingMe = true; setupState(false, '✅ تمت الموافقة! رمزك: ' + r.pin + ' … جاري تجهيز حسابك');
+      try { await createMe(r.name || 'مستخدم', r.pin); myJoinUnsub?.(); myJoinUnsub = null; }
+      catch (e) { console.error(e); creatingMe = false; setupState(false, 'صار خطأ أثناء تجهيز الحساب، افتح التطبيق مرة ثانية.'); }
+    }
+  }, e => { console.error(e); setupState(true); });
+}
+$('setupRetry').addEventListener('click', async () => {
+  try { await fs.doc('joinRequests/' + uid).delete(); } catch (e) { console.error(e); toast('ما قدرنا نرسل طلب جديد'); }
+});
+
+let joinReqs = {}, joinDraft = {}, joinSeen = null;
+function watchJoinRequests(){
+  fs.collection('joinRequests').where('status', '==', 'pending').onSnapshot(s => {
+    joinReqs = {}; s.docs.forEach(d => joinReqs[d.id] = d.data());
+    const ids = Object.keys(joinReqs);
+    if (joinSeen && ids.some(id => !joinSeen.has(id))) { toast('👑 طلب انضمام جديد'); play('incoming'); }
+    joinSeen = new Set(ids);
+    $('joinReqBtn').hidden = !ids.length; $('joinReqCount').textContent = '(' + ids.length + ')';
+    renderJoinRequests();
+  }, e => console.error(e));
+}
+function renderJoinRequests(){
+  const box = $('joinReqList'); $('joinReqCard').hidden = !isOwner(uid);
+  if (box.contains(document.activeElement)) return;   // لا نمسح الرمز وأنت تكتبه
+  box.replaceChildren();
+  const ids = Object.keys(joinReqs).sort((a, b) => (joinReqs[a].at || 0) - (joinReqs[b].at || 0));
+  if (!ids.length) { box.append(el('div', 'hint', 'ما فيه طلبات جديدة.')); return; }
+  ids.forEach(id => {
+    const r = joinReqs[id], row = el('div', 'join-row');
+    const info = el('div', 'join-info'); info.append(el('b', '', r.name || 'بدون اسم'), el('span', 'hint', ' · ' + ago(r.at || Date.now())));
+    const inp = el('input', 'pininput'); inp.maxLength = 8; inp.autocomplete = 'off'; inp.setAttribute('autocapitalize', 'characters');
+    inp.value = joinDraft[id] || ''; inp.placeholder = 'اكتب 8 خانات، مثل 2A2A2A2A';
+    inp.addEventListener('input', () => { joinDraft[id] = inp.value.toUpperCase(); });
+    const ok = el('button', 'btn primary sm', 'قبول'), no = el('button', 'btn danger sm', 'رفض'); ok.type = no.type = 'button';
+    ok.addEventListener('click', () => approveJoin(id, inp.value, ok));
+    no.addEventListener('click', () => rejectJoin(id));
+    const line = el('div', 'line'); line.append(inp, ok, no);
+    row.append(info, line); box.append(row);
+  });
+}
+async function approveJoin(id, pin, btn){
+  pin = String(pin || '').trim().toUpperCase();
+  if (!/^[0-9A-Z]{8}$/.test(pin)) { toast('الرمز لازم يكون 8 خانات: أرقام وحروف إنجليزية'); return; }
+  btn.disabled = true;
+  try {
+    if ((await fs.doc('pins/' + pin).get()).exists) { toast('هذا الرمز مأخوذ، اختر غيره'); btn.disabled = false; return; }
+    const b = fs.batch();
+    b.set(fs.doc('pins/' + pin), { uid: id });
+    b.update(fs.doc('joinRequests/' + id), { status: 'approved', pin, decidedAt: Date.now() });
+    await b.commit();
+    delete joinDraft[id];
+    toast('✅ تمت الموافقة، رمزه: ' + pin);
+  } catch (e) { console.error(e); toast('ما قدرنا نوافق، تأكد من قواعد Firebase'); btn.disabled = false; }
+}
+async function rejectJoin(id){
+  const ok = await askText('اكتب "رفض" لتأكيد رفض طلب ' + (joinReqs[id]?.name || ''));
+  if (ok !== 'رفض') return;
+  try { await fs.doc('joinRequests/' + id).update({ status: 'rejected', decidedAt: Date.now() }); toast('تم رفض الطلب'); }
+  catch (e) { console.error(e); toast('ما قدرنا نرفض الطلب'); }
+}
+$('joinReqBtn').addEventListener('click', () => { openProfile(uid); setTimeout(() => $('joinReqCard').scrollIntoView({ block: 'start', behavior: 'smooth' }), 80); });
 
 boot();
 
