@@ -35,6 +35,8 @@ jobs:
 
       - name: Prepare web files
         run: |
+          [ "$GITHUB_REF_NAME" = "fix/ios-keyboard-viewport" ] || { echo "Internal test build requires fix branch"; exit 1; }
+          node --test tests/viewport.test.cjs
           rm -rf www && mkdir -p www
           cp index.html app.js style.css firebase-config.js manifest.json icon-192.png icon-512.png www/
           for f in privacy.html terms.html; do [ -f "$f" ] && cp "$f" www/; done
@@ -110,7 +112,7 @@ jobs:
         run: |
           xcode-project build-ipa --workspace "$XCODE_WORKSPACE" --scheme "$XCODE_SCHEME"
 
-      - name: Upload to TestFlight (internal testing)
+      - name: Upload to Apple for TestFlight and App Store
         run: |
           app-store-connect publish --path build/ios/ipa/*.ipa
 

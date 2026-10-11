@@ -2,15 +2,45 @@
 'use strict';
 
 const $ = id => document.getElementById(id);
-// Keep the composer visible when the iPhone keyboard changes the visible viewport.
+// One layout owner: follow the visible viewport, including Safari's focus pan.
+// Capacitor resizes the native WebView; never subtract keyboardHeight again.
+let viewportFrame = 0, nativeKeyboardOpen = false;
 function syncViewport(){
   const viewport = window.visualViewport;
-  if (viewport && viewport.scale === 1) {
-    document.documentElement.style.setProperty('--app-height', viewport.height + 'px');
-  }
+  if (viewport && Math.abs(viewport.scale - 1) > 0.01) return;
+  const root = document.documentElement;
+  const height = viewport?.height ?? window.innerHeight;
+  const top = Math.max(0, viewport?.offsetTop ?? 0);
+  if (height <= 0) return; // Ignore transient measurements during rotation.
+  const inputFocused = document.activeElement?.matches('input,textarea,[contenteditable="true"]');
+  const keyboardOpen = nativeKeyboardOpen ||
+    (inputFocused && window.innerHeight - height - top > 80);
+  const list = document.getElementById('msgList');
+  const atBottom = list && list.scrollHeight - list.scrollTop - list.clientHeight < 80;
+  root.style.setProperty('--app-height', height + 'px');
+  root.style.setProperty('--app-top', top + 'px');
+  root.classList.toggle('keyboard-open', !!keyboardOpen);
+  // Only follow the latest message if the reader was already near the bottom.
+  if (atBottom) list.scrollTop = list.scrollHeight;
 }
-window.visualViewport?.addEventListener('resize', syncViewport);
-window.addEventListener('resize', syncViewport);
+function scheduleViewport(){
+  if (viewportFrame) return;
+  viewportFrame = requestAnimationFrame(() => { viewportFrame = 0; syncViewport(); });
+}
+window.visualViewport?.addEventListener('resize', scheduleViewport);
+window.visualViewport?.addEventListener('scroll', scheduleViewport);
+window.addEventListener('resize', scheduleViewport);
+window.addEventListener('scroll', scheduleViewport, { passive: true });
+window.addEventListener('orientationchange', scheduleViewport);
+window.addEventListener('pageshow', scheduleViewport);
+document.addEventListener('visibilitychange', scheduleViewport);
+document.addEventListener('focusin', scheduleViewport);
+document.addEventListener('focusout', scheduleViewport);
+// Keyboard plugin also emits these compatibility events on window.
+window.addEventListener('keyboardWillShow', () => { nativeKeyboardOpen = true; scheduleViewport(); });
+window.addEventListener('keyboardDidShow', scheduleViewport);
+window.addEventListener('keyboardWillHide', scheduleViewport);
+window.addEventListener('keyboardDidHide', () => { nativeKeyboardOpen = false; scheduleViewport(); });
 syncViewport();
 const COLORS = ['#c0392b','#2e86c1','#239b56','#b9770e','#7d3c98','#148f77','#a04000','#2c3e8f'];
 const COUNTRIES = [
@@ -18,12 +48,16 @@ const COUNTRIES = [
   ['YE','اليمن'],['IQ','العراق'],['JO','الأردن'],['EG','مصر'],['SY','سوريا'],['LB','لبنان'],
   ['PS','فلسطين'],['SD','السودان'],['LY','ليبيا'],['TN','تونس'],['DZ','الجزائر'],['MA','المغرب'],['','أخرى']
 ];
-const EMOJIS = '😊😄😁😂🤣😅😉😍😘🥰😋😜🤪😎🤩🥳😏😌🤔🤨😐😶🙄😴😢😭😤😡🤬😱😳🥺😇🤗🤭🤫👍👎👌✌️🤝🙏👏💪❤️💔💯🔥⭐🎉🌹☕🚗✈️🏕️⚽'.match(/\p{Extended_Pictographic}️?/gu);
 const DEFAULT_CAT = 'جهات الاتصال';
 const OWNER_UID = '7KzlcizFv8TrIeqRVqi6BjNoCue2';   // صاحب التطبيق: الوحيد اللي يقدر يغيّر رمز PIN
 const APP_NAME = 'BPB OLD';
 // داخل تطبيق الآيفون (Capacitor): دخول بدون حساب فقط + اهتزاز حقيقي
 const IS_NATIVE = !!window.Capacitor?.isNativePlatform?.();
+if (IS_NATIVE && window.Capacitor?.getPlatform?.() === 'ios') {
+  // Disable the outer UIScrollView, leaving CSS message/form scrollers active.
+  window.Capacitor?.Plugins?.Keyboard?.setScroll({ isDisabled: true })
+    .catch(e => console.warn('Could not disable outer WebView scrolling', e));
+}
 const Haptics = IS_NATIVE ? window.Capacitor?.Plugins?.Haptics : null;
 let blocked = {};                 // المستخدمين اللي حظرتهم
 const gone = {};                  // حسابات انحذفت
@@ -925,7 +959,6 @@ async function openChat(peer){
   catch (e) { console.error(e); toast('ما قدرنا نفتح الدردشة'); return; }
   show('s-chat');
   chatId = id; chatPeer = peer; msgs = []; curChat = null; firstMsgsSnap = true;
-  $('emojiPanel').hidden = true;
   watchUser(peer); renderChatHead();
   $('msgList').replaceChildren(el('div', 'empty', 'جاري التحميل…'));
   unsubChat = fs.doc('chats/' + id).onSnapshot(s => { curChat = s.data() || {}; renderMsgs(); renderTyping(); });
@@ -949,7 +982,7 @@ function renderChatHead(){
   $('chStatus').className = 'st-icon' + (d.busy ? ' busy' : isOnline(chatPeer) ? '' : ' off');
   $('chMsg').textContent = d.msg || statusText(chatPeer);
   const b = isBlocked(chatPeer);
-  $('composer').hidden = b; $('pingBtn').hidden = b; $('sendBtn').hidden = b; if (b) $('emojiPanel').hidden = true;
+  $('composer').hidden = b; $('pingBtn').hidden = b; updateComposer();
   $('blockedBar').hidden = !b;
 }
 $('chInfo').addEventListener('click', () => chatPeer && openProfile(chatPeer));
@@ -1015,13 +1048,20 @@ async function sendMsg(data){
   try { await b.commit(); if (data.kind === 'ping') { play('ping'); shake(); } else play('sent'); }
   catch (e) { console.error(e); toast('ما وصلت الرسالة، تأكد من الاتصال'); }
 }
+function updateComposer(){
+  $('sendBtn').hidden = $('composer').hidden || !$('msgInput').value.trim();
+}
 function sendText(){
-  const text = $('msgInput').value.trim(); if (!text) return;
-  $('msgInput').value = ''; sendMsg({ kind: 'text', text });
+  const input = $('msgInput');
+  const text = input.value.trim(); if (!text || $('composer').hidden) return;
+  input.value = ''; updateComposer(); sendMsg({ kind: 'text', text });
+  input.focus({ preventScroll: true });
 }
 $('composer').addEventListener('submit', e => { e.preventDefault(); sendText(); });
-$('sendBtn').addEventListener('click', sendText);
+// A tap sends through the form once and keeps iOS from blurring the input.
+$('sendBtn').addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') e.preventDefault(); });
 $('msgInput').addEventListener('input', () => {
+  updateComposer();
   if (!chatId || Date.now() - typingSent < 3000) return;
   typingSent = Date.now();
   fs.doc('chats/' + chatId).update({ ['typing.' + uid]: typingSent }).catch(() => {});
@@ -1033,7 +1073,6 @@ $('pingBtn').addEventListener('click', () => {
 });
 
 // الوجوه التعبيرية
-EMOJIS.forEach(e => { const b = el('button', '', e); b.type = 'button'; b.addEventListener('click', () => { const i = $('msgInput'); i.value += e; i.focus(); }); $('emojiPanel').append(b); });
-$('emojiBtn').addEventListener('click', () => { $('emojiPanel').hidden = !$('emojiPanel').hidden; const l = $('msgList'); l.scrollTop = l.scrollHeight; });
+updateComposer();
 
 boot();

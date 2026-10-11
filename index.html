@@ -13,7 +13,7 @@
 <link rel="manifest" href="manifest.json">
 <title>BPB OLD</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=11">
+<link rel="stylesheet" href="style.css?v=13">
 </head>
 <body>
 <!-- أيقونات -->
@@ -206,6 +206,7 @@
 
   <!-- الدردشة -->
   <div id="s-chat" class="view" hidden>
+    <header class="chat-header">
     <button type="button" class="bluebar" id="chInfo">
       <span id="chAvatar"></span>
       <span class="bb-info">
@@ -213,6 +214,8 @@
         <span class="bb-msg" id="chMsg"></span>
       </span>
     </button>
+    <button type="button" class="chat-back" data-back aria-label="رجوع"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M15 4l-8 8 8 8" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </header>
     <main id="msgList"></main>
     <div class="typing" id="typing"></div>
     <div class="blockedbar" id="blockedBar" hidden>
@@ -220,15 +223,10 @@
       <button type="button" class="btn sm" id="chUnblock">إلغاء الحظر</button>
     </div>
     <form class="composer" id="composer">
-      <input id="msgInput" maxlength="2000" placeholder="أدخل رسالة" autocomplete="off">
-      <button type="button" class="smile" id="emojiBtn" aria-label="وجوه تعبيرية"><svg><use href="#i-smile"/></svg></button>
+      <button type="button" id="pingBtn" class="composer-ping" aria-label="وكز"><svg aria-hidden="true"><use href="#i-ping"/></svg><span>وكز</span></button>
+      <input id="msgInput" maxlength="2000" placeholder="أدخل رسالة" aria-label="الرسالة" autocomplete="off" enterkeyhint="send">
+      <button type="submit" id="sendBtn" class="composer-send" aria-label="إرسال الرسالة" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m6-6-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     </form>
-    <div class="emojis" id="emojiPanel" hidden></div>
-    <nav class="actionbar">
-      <button type="button" data-back><svg><use href="#i-back"/></svg><span>رجوع</span></button>
-      <button type="button" id="pingBtn" class="pingact"><svg><use href="#i-ping"/></svg><span>وكز</span></button>
-      <button type="button" id="sendBtn"><svg><use href="#i-send"/></svg><span>إرسال</span></button>
-    </nav>
   </div>
 
   <!-- نافذة -->
@@ -249,6 +247,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="app.js?v=11"></script>
+<script src="app.js?v=13"></script>
 </body>
 </html>
