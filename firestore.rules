@@ -99,6 +99,43 @@ service cloud.firestore {
           && (!('text' in request.resource.data) || request.resource.data.text.size() <= 2000)
           && !blockedBy(chatId.split('_')[0])
           && !blockedBy(chatId.split('_')[1]);
+        allow update: if signedIn() && isMember(chatId)
+          && resource.data.kind == 'once-photo' && resource.data.from != request.auth.uid
+          && resource.data.opened == false && request.resource.data.opened == true
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['opened'])
+          && !existsAfter(/databases/$(database)/documents/chats/$(chatId)/oncePhotos/$(messageId));
+        allow delete: if signedIn() && isMember(chatId)
+          && resource.data.ts <= request.time.toMillis() - 86400000;
+      }
+      match /oncePhotos/{messageId} {
+        allow create: if signedIn() && isMember(chatId)
+          && request.resource.data.keys().hasOnly(['from','to','image','expiresAt'])
+          && request.resource.data.from == request.auth.uid
+          && request.resource.data.to in get(/databases/$(database)/documents/chats/$(chatId)).data.members
+          && request.resource.data.to != request.auth.uid
+          && request.resource.data.image is string && request.resource.data.image.size() <= 600000
+          && request.resource.data.expiresAt is timestamp
+          && request.resource.data.expiresAt <= request.time + duration.value(25,'h')
+          && getAfter(/databases/$(database)/documents/chats/$(chatId)/messages/$(messageId)).data.kind == 'once-photo'
+          && !blockedBy(request.resource.data.to);
+        allow get: if signedIn() && isMember(chatId)
+          && (!exists(/databases/$(database)/documents/chats/$(chatId)/oncePhotos/$(messageId)) || resource.data.to == request.auth.uid);
+        allow delete: if signedIn() && isMember(chatId)
+          && (!exists(/databases/$(database)/documents/chats/$(chatId)/oncePhotos/$(messageId)) || resource.data.expiresAt <= request.time || (
+            resource.data.to == request.auth.uid
+            && getAfter(/databases/$(database)/documents/chats/$(chatId)/messages/$(messageId)).data.opened == true));
+      }
+      match /voiceClips/{messageId} {
+        allow create: if signedIn() && isMember(chatId)
+          && request.resource.data.keys().hasOnly(['from','audio','expiresAt'])
+          && request.resource.data.from == request.auth.uid
+          && request.resource.data.audio is string && request.resource.data.audio.size() <= 600000
+          && request.resource.data.expiresAt is timestamp
+          && request.resource.data.expiresAt <= request.time + duration.value(25,'h')
+          && getAfter(/databases/$(database)/documents/chats/$(chatId)/messages/$(messageId)).data.kind == 'voice';
+        allow get: if signedIn() && isMember(chatId);
+        allow delete: if signedIn() && isMember(chatId)
+          && (!exists(/databases/$(database)/documents/chats/$(chatId)/voiceClips/$(messageId)) || resource.data.expiresAt <= request.time);
       }
     }
 

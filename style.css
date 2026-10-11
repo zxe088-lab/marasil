@@ -288,3 +288,33 @@ form.composer .composer-write input{flex:1;width:0;min-width:0;border:0;backgrou
 .remove-sticker{border:0;background:transparent;color:#555;font-size:22px;padding:4px 8px}
 .sticker-message{display:flex;align-items:center;gap:8px;min-width:0}
 .sticker-caption{min-width:0;overflow-wrap:anywhere}
+/* Rounded message bar; the device keeps its native keyboard. */
+#s-chat form.composer{direction:ltr;gap:7px;background:#242424;align-items:center}
+#s-chat .composer-write{background:#131313;border:1px solid #3d3d3d;border-radius:26px;min-height:46px;overflow:hidden}
+#s-chat .composer-write input{color:#fff;direction:rtl;padding:10px 6px;font-style:normal}
+#s-chat .composer-write input::placeholder{color:#aaa}
+#s-chat form.composer .composer-ping{order:0;flex:0 0 46px;width:46px;height:46px;border:1px solid #444;border-radius:50%;background:#131313;color:#ff4545;font-size:10px;font-weight:700;direction:ltr}
+#s-chat form.composer .composer-face{order:0;flex:0 0 38px;width:38px;height:42px;padding:7px;color:#fff;background:transparent}
+.composer-camera,.composer-voice{flex:0 0 44px;width:44px;height:44px;padding:9px;border:1px solid #444;border-radius:50%;display:grid;place-items:center;background:#131313;color:#fff;touch-action:manipulation}
+.composer-voice{background:#19ca61;color:#063d1c;border-color:#19ca61}
+.composer-voice.recording{background:#df3030;color:#fff;border-color:#df3030}
+.composer svg{width:25px;height:25px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#s-chat form.composer .composer-face svg{width:24px;height:24px}
+.composer-voice rect{fill:currentColor;stroke:none}
+.voice-draft{display:flex;align-items:center;gap:8px;padding:8px;background:#242424;color:#fff}
+.voice-draft[hidden],.once-viewer[hidden]{display:none}
+.voice-draft audio{flex:1;min-width:0;height:36px}
+.voice-draft button{border:0;border-radius:8px;padding:8px;background:#19ca61;color:#063d1c}
+.voice-draft button:last-child{background:transparent;color:#fff}
+.chat-audio{max-width:100%;width:230px;height:40px}
+.once-photo{border:1px solid #aaa;border-radius:8px;padding:10px;background:transparent;color:inherit;font:inherit}
+.once-viewer{position:fixed;z-index:1000;inset:0;background:#101010;display:flex;flex-direction:column;align-items:center;justify-content:center;color:white;padding:20px}
+.once-viewer img{max-width:100%;max-height:80vh;object-fit:contain}
+.once-viewer button{position:absolute;top:calc(14px + env(safe-area-inset-top));right:16px;border:0;background:transparent;color:white;font-size:34px}
+@media(max-width:360px){
+  #s-chat form.composer{gap:5px;padding-inline:8px}
+  #s-chat form.composer .composer-ping{flex-basis:40px;width:40px;height:40px;font-size:9px}
+  .composer-camera,.composer-voice{flex-basis:38px;width:38px;height:38px;padding:7px}
+  .sticker-draft .bb-sticker{--sticker-size:28px}
+  .remove-sticker{padding:0 2px;font-size:18px}
+}
