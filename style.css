@@ -336,3 +336,9 @@ form.composer .composer-write input{flex:1;width:0;min-width:0;border:0;backgrou
 .classic-category .splat[hidden]{display:none}
 .classic-category .splat svg{width:26px;height:26px}
 .classic-category > span:first-child{flex:1}
+/* المجموعات */
+.avatar.group-av{display:grid;place-items:center;border-radius:10px}
+.avatar.group-av svg{width:70%;height:70%}
+#groupsList .group-new{font-weight:700;color:#0a6fb0;justify-content:center}
+#groupsList .group-new .info{text-align:center}
+.st-icon.group{display:none}
