@@ -822,7 +822,7 @@ function renderProfile(){
   const id = profileId, d = dataOf(id) || {}, mine = id === uid;
   $('pfTitle').textContent = mine ? 'ملف التعريف الخاص بي' : 'ملف تعريف جهة الاتصال';
   $('pfBarcode').hidden = true; $('pfBarcode').replaceChildren(); $('pfBarcodeBtn').textContent = 'إظهار';
-  $('pfAvatar').replaceChildren(avatar(id, 'lg')); $('pfAvatar').title = mine ? 'اضغط لتغيير الصورة' : '';
+  $('pfAvatar').replaceChildren(avatar(id, 'lg')); $('pfAvatar').title = mine ? 'اضغط لتغيير الصورة' : ''; $('pfName').title = mine ? 'اضغط لتغيير الاسم' : '';
   $('pfPinSmall').textContent = d.pin || '';
   $('pfName').textContent = d.name || '';
   $('pfPin').textContent = d.pin || '';
@@ -834,7 +834,7 @@ function renderProfile(){
   $('pfActions').hidden = mine; $('meEdit').hidden = !mine; $('s-profile').classList.toggle('is-mine', mine);
   if (mine) {
     if (!document.activeElement?.closest('#meEdit, .mine-only')) {
-      $('edName').value = me.name || ''; $('edMsg').value = me.msg || ''; $('edMute').checked = !!me.mute;
+      $('edMsg').value = me.msg || ''; $('edMute').checked = !!me.mute;
       const sel = $('edCountry'); if (!sel.options.length) COUNTRIES.forEach(([cc, n]) => { const o = el('option', '', (cc ? flagOf(cc) + ' ' : '') + n); o.value = cc; sel.append(o); });
       sel.value = me.country || '';
     }
@@ -857,10 +857,15 @@ async function saveMe(fields, change, msg){
   catch (e) { console.error(e); toast('ما قدرنا نحفظ، جرّب مرة ثانية'); }
 }
 // ملف التعريف يتعدل مباشرة: كل خانة تنحفظ لحالها أول ما تخلص منها
-$('edName').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } });
-$('edName').addEventListener('change', () => {
-  const name = $('edName').value.replace(/\s+/g, ' ').trim();
-  if (!name) { toast('اسم العرض ما يصير فاضي'); $('edName').value = me.name || ''; return; }
+// الاسم يتغير بالضغط عليه
+$('pfName').addEventListener('click', async () => {
+  if (profileId !== uid) return;
+  $('modalInput').maxLength = 40;
+  const v = await askText('اسم العرض', me.name);
+  $('modalInput').maxLength = 30;
+  if (v == null) return;
+  const name = v.replace(/\s+/g, ' ').trim();
+  if (!name) { toast('اسم العرض ما يصير فاضي'); return; }
   if (name !== me.name) saveMe({ name }, 'name', 'تم حفظ الاسم');
 });
 $('edMsg').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } });
@@ -925,7 +930,6 @@ $('randPinBtn').addEventListener('click', async () => {
   toast('جرّب مرة ثانية');
 });
 
-$('photoBtn').addEventListener('click', () => $('photoInput').click());
 $('pfAvatar').addEventListener('click', () => { if (profileId === uid) $('photoInput').click(); });
 $('photoDel').addEventListener('click', () => saveMe({ photo: '' }, 'photo', 'تمت إزالة الصورة'));
 $('photoInput').addEventListener('change', async e => {
