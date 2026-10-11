@@ -245,13 +245,27 @@ function renderTonePicker(){
 const buzz = pattern => {
   try {
     if (Haptics) {
-      const ms = Array.isArray(pattern) ? pattern.filter((_, i) => i % 2 === 0).reduce((a, b) => a + b, 0) : pattern;
-      Haptics.vibrate({ duration: Math.min(ms, 1500) });
+      // الآيفون: الاهتزاز العادي ما يشتغل إذا الجوال على الصامت، فنضيف نبضات Taptic قوية تشتغل حتى بالصامت
+      const pulses = Array.isArray(pattern) ? pattern : [pattern];
+      Haptics.vibrate?.({ duration: 300 })?.catch?.(() => {});
+      let t = 0;
+      pulses.forEach((d, i) => {
+        if (i % 2 === 0) for (let k = 0, n = Math.max(1, Math.round(d / 110)); k < n; k++)
+          setTimeout(() => { Haptics.impact?.({ style: 'HEAVY' })?.catch?.(() => {}); }, t + k * 110);
+        t += d;
+      });
       return;
     }
     navigator.vibrate?.(pattern);
   } catch {}
 };
+// لمبة بلاك بيري: ومضة وحدة مع كل رسالة واصلة ثم تطفى
+let ledTimer = null;
+function ledFlash(){
+  const l = $('led'); if (!l) return;
+  l.classList.remove('on'); void l.offsetWidth; l.classList.add('on');
+  clearTimeout(ledTimer); ledTimer = setTimeout(() => l.classList.remove('on'), 1600);
+}
 function nudgeEffect(){
   buzz([400, 100, 400, 100, 400, 100, 800]);
 }
@@ -475,6 +489,7 @@ function listen(){
       if (d.isGroup) (d.members || []).forEach(m => m !== uid && watchUser(m)); else if (peer) watchUser(peer);
       if (!firstChatsSnap && c.type !== 'removed' && d.lastFrom && d.lastFrom !== uid && !isBlocked(d.lastFrom) && d.lastTs > (chats[c.doc.id]?.lastTs || 0)) {
         const viewing = c.doc.id === chatId && document.visibilityState === 'visible';
+        ledFlash();
         if (d.lastKind === 'ping') nudgeEffect();
         else if (!viewing) { play('incoming'); buzz(200); }
       }
@@ -732,7 +747,6 @@ function renderUpdates(){
 function updateTitle(){
   const n = Object.values(chats).filter(c => unreadOf(c) && !isBlocked(c.lastFrom)).length;
   document.title = (n ? '(' + n + ') ' : '') + APP_NAME;
-  $('led').classList.toggle('on', n > 0);
   $('unreadBadge').hidden = !n; $('unreadBadge').textContent = n;
 }
 
