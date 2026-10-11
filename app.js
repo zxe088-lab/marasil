@@ -245,8 +245,15 @@ function renderTonePicker(){
 const buzz = pattern => {
   try {
     if (Haptics) {
-      const ms = Array.isArray(pattern) ? pattern.filter((_, i) => i % 2 === 0).reduce((a, b) => a + b, 0) : pattern;
-      Haptics.vibrate({ duration: Math.min(ms, 1500) });
+      // الآيفون: الاهتزاز العادي ما يشتغل إذا الجوال على الصامت، فنضيف نبضات Taptic قوية تشتغل حتى بالصامت
+      const pulses = Array.isArray(pattern) ? pattern : [pattern];
+      Haptics.vibrate?.({ duration: 300 })?.catch?.(() => {});
+      let t = 0;
+      pulses.forEach((d, i) => {
+        if (i % 2 === 0) for (let k = 0, n = Math.max(1, Math.round(d / 110)); k < n; k++)
+          setTimeout(() => { Haptics.impact?.({ style: 'HEAVY' })?.catch?.(() => {}); }, t + k * 110);
+        t += d;
+      });
       return;
     }
     navigator.vibrate?.(pattern);
