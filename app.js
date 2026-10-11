@@ -552,7 +552,7 @@ function renderContacts(){
 $('search').addEventListener('input', renderContacts);
 
 /* ---------- القائمة القابلة للتعديل ---------- */
-const BUILTIN = ['chats', 'updates', 'contacts', 'friends', 'broadcast', 'groups', 'pending'];
+const BUILTIN = ['chats', 'updates', 'contacts', 'friends', 'groups', 'broadcast', 'pending'];
 const BUILTIN_LABEL = { chats: 'الدردشات', updates: 'التحديثات', contacts: 'الأسماء', friends: 'الأصدقاء', broadcast: '📢 بودكاست', groups: 'المجموعات', pending: 'المعلّق' };
 const userCats = () => (me.cats || [DEFAULT_CAT]).filter(c => c !== DEFAULT_CAT);
 const defaultLabel = k => k.startsWith('cat:') ? k.slice(4) : BUILTIN_LABEL[k];
@@ -561,7 +561,7 @@ function menuCfg(src = me.menu, cats = userCats()){
   const order = (m.order || []).filter(k => all.includes(k));
   all.forEach(k => {
     if (order.includes(k)) return;
-    const at = k.startsWith('cat:') ? order.indexOf('contacts') : k === 'broadcast' && order.includes('friends') ? order.indexOf('friends') + 1 : -1;
+    const at = k.startsWith('cat:') ? order.indexOf('contacts') : k === 'broadcast' && order.includes('groups') ? order.indexOf('groups') + 1 : -1;
     at >= 0 ? order.splice(at, 0, k) : order.push(k);
   });
   return { order, labels: { ...(m.labels || {}) }, hidden: (m.hidden || []).filter(k => all.includes(k)) };
