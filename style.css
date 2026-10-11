@@ -239,3 +239,8 @@ html{background:#1c2023}
 .bc-row .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
 .bctag{display:block;font-size:11px;font-weight:700;color:#0a6fb0;margin-bottom:2px}
 .bc-entry .category-toggle{font-size:24px}
+/* زر الرجوع أعلى اليسار مثل الدردشة */
+.bluebar.plain{direction:rtl}
+.bluebar.plain .top-back{margin-inline-start:auto;flex:0 0 44px;align-self:stretch;margin-block:-6px;margin-inline-end:-12px;border:0;padding:10px;background:transparent;color:#fff;display:grid;place-items:center}
+.bluebar.plain .top-back svg{width:24px;height:24px}
+.view.no-actions{padding-bottom:var(--bottom-inset)}

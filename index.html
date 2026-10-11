@@ -13,7 +13,7 @@
 <link rel="manifest" href="manifest.json">
 <title>BPB OLD</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=16">
+<link rel="stylesheet" href="style.css?v=17">
 </head>
 <body>
 <!-- أيقونات -->
@@ -82,8 +82,8 @@
   </div>
 
   <!-- إضافة جهة اتصال -->
-  <div id="s-add" class="view" hidden>
-    <div class="bluebar plain"><span class="bb-title">إضافة جهة اتصال</span></div>
+  <div id="s-add" class="view no-actions" hidden>
+    <div class="bluebar plain"><span class="bb-title">إضافة جهة اتصال</span><button type="button" class="top-back" data-back aria-label="رجوع"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M15 4l-8 8 8 8" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
     <form class="panel" id="addForm">
       <div class="card">
         <label class="lbl" for="addPin">رمز PIN:</label>
@@ -94,12 +94,11 @@
       <button type="submit" class="btn primary">إرسال دعوة وإضافة</button>
     </form>
     <div class="spacer"></div>
-    <nav class="actionbar"><button type="button" data-back><svg><use href="#i-back"/></svg><span>رجوع</span></button></nav>
   </div>
 
   <!-- بودكاست (Broadcast) -->
-  <div id="s-broadcast" class="view" hidden>
-    <div class="bluebar plain"><span class="bb-title" id="bcTitle">📢 بودكاست</span></div>
+  <div id="s-broadcast" class="view no-actions" hidden>
+    <div class="bluebar plain"><span class="bb-title" id="bcTitle">📢 بودكاست</span><button type="button" class="top-back" data-back aria-label="رجوع"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M15 4l-8 8 8 8" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
     <form class="scroll graybg" id="bcForm">
       <div class="card">
         <label class="lbl" for="bcText">الرسالة:</label>
@@ -111,12 +110,11 @@
       </div>
       <div class="actions"><button type="submit" class="btn primary" id="bcSend">📢 إرسال</button></div>
     </form>
-    <nav class="actionbar"><button type="button" data-back><svg><use href="#i-back"/></svg><span>رجوع</span></button></nav>
   </div>
 
   <!-- تعديل القائمة -->
-  <div id="s-menu" class="view" hidden>
-    <div class="bluebar plain"><span class="bb-title">تعديل القائمة</span></div>
+  <div id="s-menu" class="view no-actions" hidden>
+    <div class="bluebar plain"><span class="bb-title">تعديل القائمة</span><button type="button" class="top-back" data-back aria-label="رجوع"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M15 4l-8 8 8 8" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
     <div class="scroll graybg">
       <div class="card">
         <div class="hint">غيّر أسماء القائمة وزخرفها بالرموز والإيموجي كما تحب، ورتّبها بالأسهم، وأخفِ ما لا تحتاجه.</div>
@@ -131,12 +129,11 @@
         <button type="button" class="btn" id="menuReset">إرجاع الشكل الافتراضي</button>
       </div>
     </div>
-    <nav class="actionbar"><button type="button" data-back><svg><use href="#i-back"/></svg><span>رجوع</span></button></nav>
   </div>
 
   <!-- ملف التعريف -->
-  <div id="s-profile" class="view" hidden>
-    <div class="bluebar plain"><span class="bb-title" id="pfTitle">ملف تعريف جهة الاتصال</span></div>
+  <div id="s-profile" class="view no-actions" hidden>
+    <div class="bluebar plain"><span class="bb-title" id="pfTitle">ملف تعريف جهة الاتصال</span><button type="button" class="top-back" data-back aria-label="رجوع"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M15 4l-8 8 8 8" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
     <div class="scroll graybg">
       <div class="card">
         <div class="pf-top">
@@ -218,7 +215,6 @@
         </div>
       </div>
     </div>
-    <nav class="actionbar"><button type="button" data-back><svg><use href="#i-back"/></svg><span>رجوع</span></button></nav>
   </div>
 
   <!-- الدردشة -->
