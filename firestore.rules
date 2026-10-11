@@ -5,7 +5,7 @@ service cloud.firestore {
     // ---------- دوال مساعدة ----------
     function signedIn() { return request.auth != null; }
     // صاحب التطبيق (يغيّر رمز PIN ويقرأ البلاغات)
-    function isAdmin() { return signedIn() && request.auth.uid == '7KzlcizFv8TrIeqRVqi6BjNoCue2'; }
+    function isAdmin() { return signedIn() && request.auth.uid in ['7KzlcizFv8TrIeqRVqi6BjNoCue2', 'c5yYZKI92rXqwr0cb1gm2HNKdSy2']; }
     function isMember(chatId) {
       return request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.members;
     }
