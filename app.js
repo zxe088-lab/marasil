@@ -1027,7 +1027,13 @@ function renderMsgs(fromMsgs){
     else { mark = el('span', 'mark d', 'D'); mark.title = 'تم التسليم'; }
     const txt = el('span', 'txt');
     if (m.broadcast) txt.append(el('span', 'bctag', '📢 بودكاست'));
-    if (m.kind === 'sticker' && Number.isInteger(m.sticker) && m.sticker >= 0 && m.sticker < 48) {
+    if(m.kind === 'richtext' && Array.isArray(m.parts)) {
+      for(const part of m.parts.slice(0,128)){
+        if(typeof part.text==='string') txt.append(document.createTextNode(part.text));
+        else if(Number.isInteger(part.sticker)&&part.sticker>=0&&part.sticker<48) txt.append(stickerFace(part.sticker));
+      }
+    }
+    else if (m.kind === 'sticker' && Number.isInteger(m.sticker) && m.sticker >= 0 && m.sticker < 48) {
       txt.classList.add('sticker-message');
       txt.append(stickerFace(m.sticker));
       if (m.text && m.text !== 'ملصق بلاك بيري') txt.append(el('span', 'sticker-caption', m.text));
@@ -1078,6 +1084,7 @@ async function sendMsg(data, expectedChat = chatId){
   catch (e) { console.error(e); toast('ما وصلت الرسالة، تأكد من الاتصال'); return false; }
 }
 let draftSticker = null;
+let editorRange = null, lastEditorParts = [];
 let voiceState = null, voiceDraftUrl = null, voiceBusy = false, photoBusy = false;
 const MESSAGE_LIFETIME = 24 * 60 * 60 * 1000;
 const cleanedChats = new Set();
@@ -1178,29 +1185,59 @@ $('chatCameraInput').onchange=()=>{const file=$('chatCameraInput').files[0];$('c
 $('closeOnceViewer').onclick=closeOncePhoto;
 document.addEventListener('visibilitychange',()=>{if(document.hidden){cancelVoice();closeOncePhoto();updateComposer();}});
 setInterval(()=>{if(!document.hidden){if(chatId)renderMsgs();renderChats();}},60000);
-function clearDraftSticker(){ draftSticker = null; $('stickerDraft')?.replaceChildren(); if ($('stickerDraft')) $('stickerDraft').hidden = true; updateComposer(); }
+function editorParts(){
+  const parts=[];
+  const text=value=>{value=value.replace(/\u200b/g,'');if(!value)return;const last=parts[parts.length-1];if(last&&typeof last.text==='string')last.text+=value;else parts.push({text:value});};
+  const walk=node=>{
+    if(node.nodeType===Node.TEXT_NODE){text(node.nodeValue);return;}
+    if(node.nodeType!==Node.ELEMENT_NODE)return;
+    if(node.hasAttribute('data-sticker')){const index=Number(node.dataset.sticker);if(Number.isInteger(index)&&index>=0&&index<48)parts.push({sticker:index});return;}
+    if(node.tagName==='BR'){text('\n');return;}
+    if((node.tagName==='DIV'||node.tagName==='P')&&parts.length)text('\n');
+    node.childNodes.forEach(walk);
+  };
+  $('msgInput').childNodes.forEach(walk);return parts;
+}
+function partsText(parts){return parts.map(p=>typeof p.text==='string'?p.text:'☺').join('');}
+function restoreEditor(parts){
+  const input=$('msgInput');input.replaceChildren();
+  parts.forEach(p=>{if(typeof p.text==='string')input.append(document.createTextNode(p.text));else{const face=stickerFace(p.sticker);face.dataset.sticker=p.sticker;face.contentEditable='false';input.append(face,document.createTextNode('\u200b'));}});
+  editorRange=null;
+}
+function rememberEditorRange(){
+  const selection=window.getSelection();if(!selection?.rangeCount)return;
+  const range=selection.getRangeAt(0), input=$('msgInput');
+  if(input.contains(range.startContainer)&&input.contains(range.endContainer))editorRange=range.cloneRange();
+}
+function insertEditorNode(node){
+  const input=$('msgInput'); input.focus({preventScroll:true});
+  let range=editorRange;
+  if(!range || !input.contains(range.startContainer)||!input.contains(range.endContainer)){range=document.createRange();range.selectNodeContents(input);range.collapse(false);}
+  range.deleteContents();range.insertNode(node);
+  const tail=document.createTextNode('\u200b');node.after(tail);range.setStart(tail,1);range.collapse(true);
+  const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);editorRange=range.cloneRange();
+  input.dispatchEvent(new Event('input',{bubbles:true}));
+}
+function clearDraftSticker(){ draftSticker=null; $('msgInput').replaceChildren();editorRange=null;lastEditorParts=[];updateComposer(); }
 function selectSticker(index){
   if ($('composer').hidden) return;
-  draftSticker = index;
-  const draft = $('stickerDraft');
-  const remove = el('button', 'remove-sticker', '×'); remove.type = 'button'; remove.setAttribute('aria-label', 'إزالة الملصق');
-  remove.onclick = clearDraftSticker;
-  draft.replaceChildren(stickerFace(index), remove); draft.hidden = false;
-  updateComposer(); $('msgInput').focus({preventScroll:true});
+  if(partsText(editorParts()).length>=2000||editorParts().length>=127)return;
+  const face=stickerFace(index);face.dataset.sticker=index;face.contentEditable='false';insertEditorNode(face);
 }
 function updateComposer(){
-  if ($('composer').hidden) { toggleFaces(false); if (draftSticker != null) clearDraftSticker(); cancelVoice(); }
+  if ($('composer').hidden) { toggleFaces(false); if ($('msgInput').childNodes.length) clearDraftSticker(); cancelVoice(); }
   const button = $('voiceSendBtn'); if (!button) return;
-  const sending = !!$('msgInput').value.trim() || draftSticker != null;
+  const sending = !!partsText(editorParts()).trim();
   button.setAttribute('aria-label', sending ? 'إرسال' : 'تسجيل صوتي');
   button.dataset.mode = sending ? 'send' : 'voice';
   if (!button.classList.contains('recording')) button.innerHTML = sending ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 3 17 9-17 9 3-9zM7 12h14"/></svg>' : '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M6 11v2a6 6 0 0 0 12 0v-2M12 19v3"/></svg>';
 }
 function sendText(){
   const input = $('msgInput');
-  const text = input.value.trim(); if ((!text && draftSticker == null) || $('composer').hidden) return;
-  const data = draftSticker == null ? {kind:'text', text} : {kind:'sticker', sticker:draftSticker, text};
-  input.value = ''; clearDraftSticker(); updateComposer(); sendMsg(data);
+  const parts=editorParts(),text=partsText(parts).trim();if(!text||$('composer').hidden)return;
+  if(text.length>2000||parts.length>128){toast('الرسالة طويلة جدًا');return;}
+  const data=parts.some(p=>Number.isInteger(p.sticker))?{kind:'richtext',text,parts}:{kind:'text',text};
+  clearDraftSticker(); updateComposer(); sendMsg(data);
   input.focus({ preventScroll: true });
 }
 $('composer').addEventListener('submit', e => { e.preventDefault(); sendText(); });
@@ -1237,16 +1274,24 @@ function toggleFaces(open){
   scheduleViewport?.();
 }
 function insertFace(f){
-  const input = $('msgInput'), v = input.value;
-  const a = input.selectionStart ?? v.length, b = input.selectionEnd ?? v.length;
-  if ((v.length - (b - a) + f.length) > input.maxLength) return;
-  input.value = v.slice(0, a) + f + v.slice(b);
-  const pos = a + f.length; try { input.setSelectionRange(pos, pos); } catch {}
-  input.dispatchEvent(new Event('input', { bubbles: true }));
+  if(partsText(editorParts()).length+f.length>2000)return;insertEditorNode(document.createTextNode(f));
 }
+document.addEventListener('selectionchange',rememberEditorRange);
+$('msgInput').addEventListener('beforeinput',e=>{
+  if(e.inputType!=='deleteContentBackward')return;
+  const selection=window.getSelection();if(!selection?.rangeCount)return;const range=selection.getRangeAt(0);if(!range.collapsed)return;
+  const node=range.startContainer;let chip=null;
+  if(node.nodeType===Node.TEXT_NODE&&!node.nodeValue.slice(0,range.startOffset).replace(/\u200b/g,''))chip=node.previousSibling;
+  else if(node===$('msgInput'))chip=node.childNodes[range.startOffset-1];
+  if(chip?.nodeType===Node.ELEMENT_NODE&&chip.hasAttribute('data-sticker')){e.preventDefault();range.setStartBefore(chip);range.collapse(true);chip.remove();selection.removeAllRanges();selection.addRange(range);editorRange=range.cloneRange();$('msgInput').dispatchEvent(new Event('input',{bubbles:true}));}
+});
+$('msgInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();sendText();}});
+$('msgInput').addEventListener('paste',e=>{e.preventDefault();const text=e.clipboardData?.getData('text/plain')||'';if(partsText(editorParts()).length+text.length<=2000)insertEditorNode(document.createTextNode(text));});
+$('msgInput').addEventListener('drop',e=>e.preventDefault());
 $('faceBtn').addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') e.preventDefault(); });
 $('faceBtn').addEventListener('click', () => toggleFaces());
 $('msgInput').addEventListener('input', () => {
+  const parts=editorParts();if(partsText(parts).length>2000||parts.length>128)restoreEditor(lastEditorParts);else {lastEditorParts=parts;if(!parts.length){$('msgInput').replaceChildren();editorRange=null;}}
   updateComposer();
   if (!chatId || Date.now() - typingSent < 3000) return;
   typingSent = Date.now();
