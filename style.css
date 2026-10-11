@@ -264,3 +264,11 @@ html{background:#1c2023}
 #s-profile #pfName{flex:1;min-height:84px;display:flex;align-items:center;justify-content:center;text-align:center;white-space:pre-wrap;font-size:19px;line-height:1.5;border-radius:6px;border-color:#9aa3aa;color:#000}
 #s-profile #pfMsg{color:#000;font-size:17px;border-radius:6px;border-color:#9aa3aa;min-height:42px}
 #s-profile .kv.spread .pin.val{font-size:24px;letter-spacing:1px;color:#8a9399}
+/* زر الوجوه مكان زر الإرسال */
+form.composer .composer-face{order:-1;flex:0 0 44px;width:44px;height:44px;padding:4px;border:0;background:transparent;display:grid;place-items:center;touch-action:manipulation}
+form.composer .composer-face svg{width:30px;height:30px}
+form.composer .composer-face[aria-expanded="true"]{background:rgba(255,255,255,.15);border-radius:8px}
+.face-panel{flex-shrink:0;display:grid;grid-template-columns:repeat(8,1fr);gap:2px;max-height:180px;overflow-y:auto;padding:6px;background:#eef1f4;border-top:1px solid #b9c3cc}
+.face-panel[hidden]{display:none}
+.face-panel .face{border:0;background:transparent;font-size:26px;line-height:1;padding:6px 0;border-radius:6px;touch-action:manipulation}
+.face-panel .face:active{background:#d6dde3}
