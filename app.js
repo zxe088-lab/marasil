@@ -1008,11 +1008,6 @@ function renderMsgs(fromMsgs){
     const day = fmtDay(m.ts);
     if (day !== lastDay) { list.append(el('div', 'day', day)); lastDay = day; card = null; }
     const mine = m.from === uid;
-    if (m.kind === 'ping') {
-      const p = el('div', 'pingcard');
-      p.append(el('span', 'pw', 'PING!!!'));
-      list.append(p); card = null; return;
-    }
     if (!card || cardFrom !== m.from || m.ts - cardTs > GROUP_MS) {
       card = el('div', 'bubble' + (mine ? ' mine' : ''));
       const content = el('div', 'content'), head = el('div', 'head');
@@ -1034,6 +1029,7 @@ function renderMsgs(fromMsgs){
       txt.append(stickerFace(m.sticker));
       if (m.text && m.text !== 'ملصق بلاك بيري') txt.append(el('span', 'sticker-caption', m.text));
     }
+    else if (m.kind === 'ping') { txt.classList.add('ping-text'); txt.textContent = 'PING!!!'; }
     else txt.append(m.text || '');
     line.append(mark, txt);
     card.firstChild.append(line);
