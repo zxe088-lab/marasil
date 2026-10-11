@@ -507,7 +507,7 @@ function renderChats(){
     const info = el('span', 'info');
     const nm = el('span', 'nm'); nm.append(statusIcon(peer), el('span', '', nameOf(peer)));
     const last = c.lastKind === 'ping' ? 'وكزة PING!!!' : (c.lastFrom === uid ? 'أنت: ' : '') + (c.lastKind === 'broadcast' ? '📢 ' : '') + (c.lastMsg || '');
-    info.append(nm, el('span', 'sub', last));
+    info.append(nm, el('span', 'sub' + (c.lastKind === 'broadcast' ? ' bc' : ''), last));
     const side = el('span', 'side'); side.append(el('span', 'when', shortWhen(c.lastTs)));
     if (un) side.append(el('span', 'newpill', 'جديد'));
     row.append(avatar(peer, 'sm'), info, side);
@@ -552,7 +552,7 @@ function renderContacts(){
 $('search').addEventListener('input', renderContacts);
 
 /* ---------- القائمة القابلة للتعديل ---------- */
-const BUILTIN = ['chats', 'updates', 'contacts', 'friends', 'broadcast', 'groups', 'pending'];
+const BUILTIN = ['chats', 'updates', 'contacts', 'friends', 'groups', 'broadcast', 'pending'];
 const BUILTIN_LABEL = { chats: 'الدردشات', updates: 'التحديثات', contacts: 'الأسماء', friends: 'الأصدقاء', broadcast: '📢 بودكاست', groups: 'المجموعات', pending: 'المعلّق' };
 const userCats = () => (me.cats || [DEFAULT_CAT]).filter(c => c !== DEFAULT_CAT);
 const defaultLabel = k => k.startsWith('cat:') ? k.slice(4) : BUILTIN_LABEL[k];
@@ -561,7 +561,7 @@ function menuCfg(src = me.menu, cats = userCats()){
   const order = (m.order || []).filter(k => all.includes(k));
   all.forEach(k => {
     if (order.includes(k)) return;
-    const at = k.startsWith('cat:') ? order.indexOf('contacts') : k === 'broadcast' && order.includes('friends') ? order.indexOf('friends') + 1 : -1;
+    const at = k.startsWith('cat:') ? order.indexOf('contacts') : k === 'broadcast' && order.includes('groups') ? order.indexOf('groups') + 1 : -1;
     at >= 0 ? order.splice(at, 0, k) : order.push(k);
   });
   return { order, labels: { ...(m.labels || {}) }, hidden: (m.hidden || []).filter(k => all.includes(k)) };
@@ -822,7 +822,7 @@ function renderProfile(){
   const id = profileId, d = dataOf(id) || {}, mine = id === uid;
   $('pfTitle').textContent = mine ? 'ملف التعريف الخاص بي' : 'ملف تعريف جهة الاتصال';
   $('pfBarcode').hidden = true; $('pfBarcode').replaceChildren(); $('pfBarcodeBtn').textContent = 'إظهار';
-  $('pfAvatar').replaceChildren(avatar(id, 'lg'));
+  $('pfAvatar').replaceChildren(avatar(id, 'lg')); $('pfAvatar').title = mine ? 'اضغط لتغيير الصورة' : '';
   $('pfPinSmall').textContent = d.pin || '';
   $('pfName').textContent = d.name || '';
   $('pfPin').textContent = d.pin || '';
@@ -831,9 +831,9 @@ function renderProfile(){
   $('pfFlag').textContent = flagOf(d.country) + ' ' + countryName(d.country);
   $('pfTz').textContent = d.tz ? (d.tz.split('/').pop().replace(/_/g, ' ') + ' (' + tzOffset(d.tz) + ')') : '';
   $('pfTime').textContent = d.tz ? fmtTime(Date.now(), d.tz) : '';
-  $('pfActions').hidden = mine; $('meEdit').hidden = !mine;
+  $('pfActions').hidden = mine; $('meEdit').hidden = !mine; $('s-profile').classList.toggle('is-mine', mine);
   if (mine) {
-    if (!document.activeElement?.closest('#meEdit')) {
+    if (!document.activeElement?.closest('#meEdit, .mine-only')) {
       $('edName').value = me.name || ''; $('edMsg').value = me.msg || ''; $('edMute').checked = !!me.mute;
       const sel = $('edCountry'); if (!sel.options.length) COUNTRIES.forEach(([cc, n]) => { const o = el('option', '', (cc ? flagOf(cc) + ' ' : '') + n); o.value = cc; sel.append(o); });
       sel.value = me.country || '';
@@ -856,14 +856,20 @@ async function saveMe(fields, change, msg){
   try { await fs.doc('users/' + uid).update(change ? { ...fields, updatedAt: Date.now(), change } : fields); if (msg) toast(msg); }
   catch (e) { console.error(e); toast('ما قدرنا نحفظ، جرّب مرة ثانية'); }
 }
-$('edSave').addEventListener('click', () => {
-  const name = $('edName').value.trim(); if (!name) { toast('اسم العرض ما يصير فاضي'); return; }
-  const f = {}; let change = null;
-  if (name !== me.name) { f.name = name; change = 'name'; }
-  if ($('edMsg').value.trim() !== (me.msg || '')) { f.msg = $('edMsg').value.trim(); change = 'msg'; }
-  if ($('edCountry').value !== (me.country || '')) { f.country = $('edCountry').value; change = change || 'country'; }
-  if (!change) { toast('ما فيه تغيير'); return; }
-  saveMe(f, change, 'تم الحفظ');
+// ملف التعريف يتعدل مباشرة: كل خانة تنحفظ لحالها أول ما تخلص منها
+$('edName').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } });
+$('edName').addEventListener('change', () => {
+  const name = $('edName').value.replace(/\s+/g, ' ').trim();
+  if (!name) { toast('اسم العرض ما يصير فاضي'); $('edName').value = me.name || ''; return; }
+  if (name !== me.name) saveMe({ name }, 'name', 'تم حفظ الاسم');
+});
+$('edMsg').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } });
+$('edMsg').addEventListener('change', () => {
+  const msg = $('edMsg').value.trim();
+  if (msg !== (me.msg || '')) saveMe({ msg }, 'msg', 'تم حفظ الرسالة الشخصية');
+});
+$('edCountry').addEventListener('change', () => {
+  if ($('edCountry').value !== (me.country || '')) saveMe({ country: $('edCountry').value }, 'country', 'تم حفظ الدولة');
 });
 $('edMute').addEventListener('change', () => saveMe({ mute: $('edMute').checked }, null, $('edMute').checked ? 'تم كتم النغمات' : 'النغمات شغالة'));
 $('setAvail').addEventListener('click', () => (me.busy || me.stText) && saveMe({ busy: false, stText: '' }, 'status', 'حالتك: متوفر'));
@@ -920,6 +926,7 @@ $('randPinBtn').addEventListener('click', async () => {
 });
 
 $('photoBtn').addEventListener('click', () => $('photoInput').click());
+$('pfAvatar').addEventListener('click', () => { if (profileId === uid) $('photoInput').click(); });
 $('photoDel').addEventListener('click', () => saveMe({ photo: '' }, 'photo', 'تمت إزالة الصورة'));
 $('photoInput').addEventListener('change', async e => {
   const file = e.target.files?.[0]; e.target.value = '';
@@ -1012,7 +1019,7 @@ function renderMsgs(fromMsgs){
       list.append(card); cardFrom = m.from;
     }
     cardTs = m.ts;
-    const line = el('div', 'line');
+    const line = el('div', 'line' + (m.broadcast ? ' bc' : ''));
     let mark;
     if (!mine) mark = el('span', 'mark dot');
     else if (m.pending) { mark = el('span', 'mark p'); mark.title = 'جاري الإرسال'; }
