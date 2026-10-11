@@ -13,7 +13,7 @@
 <link rel="manifest" href="manifest.json">
 <title>BPB OLD</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=27">
+<link rel="stylesheet" href="style.css?v=28">
 </head>
 <body>
 <!-- أيقونات -->
@@ -114,6 +114,26 @@
       </div>
       <div class="actions"><button type="submit" class="btn primary" id="bcSend">📢 إرسال</button></div>
     </form>
+  </div>
+
+  <!-- المجموعات: إنشاء وإدارة -->
+  <div id="s-group" class="view no-actions" hidden>
+    <div class="bluebar plain"><span class="bb-title" id="grTitle">مجموعة جديدة</span><button type="button" class="top-back" data-back aria-label="رجوع"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M15 4l-8 8 8 8" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+    <div class="scroll graybg">
+      <div class="card">
+        <label class="lbl" for="grName">اسم المجموعة:</label>
+        <input id="grName" maxlength="40" placeholder="مثال: 👑 الشلة 👑" autocomplete="off">
+      </div>
+      <div class="card">
+        <div class="bc-head"><span class="lbl">الأعضاء: <span id="grCount">(1)</span></span></div>
+        <div id="grList"></div>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn primary" id="grSave">إنشاء المجموعة</button>
+        <button type="button" class="btn danger" id="grLeave" hidden>مغادرة المجموعة</button>
+        <button type="button" class="btn danger" id="grDelete" hidden>حذف المجموعة</button>
+      </div>
+    </div>
   </div>
 
   <!-- تعديل القائمة -->
@@ -268,7 +288,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="app.js?v=27"></script>
+<script src="app.js?v=28"></script>
 </body>
 </html>
 
