@@ -597,13 +597,14 @@ function renderContacts(){
 $('search').addEventListener('input', renderContacts);
 
 /* ---------- القائمة القابلة للتعديل ---------- */
-const BUILTIN = ['chats', 'updates', 'friends', 'groups', 'broadcast', 'pending']; const MAIN_CAT = 'cat:' + DEFAULT_CAT; // كل فئة قسم مستقل
+const BUILTIN = ['updates', 'chats', 'friends', 'groups', 'broadcast', 'pending']; const MAIN_CAT = 'cat:' + DEFAULT_CAT; // كل فئة قسم مستقل
 const BUILTIN_LABEL = { chats: 'الدردشات', updates: 'التحديثات', contacts: 'الأسماء', friends: 'الأصدقاء', broadcast: '📢 برودكاست', groups: 'المجموعات', pending: 'المعلّق' };
 const userCats = () => (me.cats || [DEFAULT_CAT]).filter(c => c !== DEFAULT_CAT);
 const defaultLabel = k => k.startsWith('cat:') ? k.slice(4) : BUILTIN_LABEL[k];
 function menuCfg(src = me.menu, cats = userCats()){
   const m = src || {}, all = [...BUILTIN, MAIN_CAT, ...cats.map(c => 'cat:' + c)];
-  const order = (m.order || []).filter(k => all.includes(k));
+  // ترتيب قديم (قبل فصل الأقسام) يرجع للترتيب الجديد الافتراضي
+  const order = (m.order && !m.order.includes('contacts') ? m.order : []).filter(k => all.includes(k));
   all.forEach(k => {
     if (order.includes(k)) return;
     const lastCat = order.reduce((p, x, j) => x.startsWith('cat:') ? j : p, -1); const at = k.startsWith('cat:') ? (lastCat >= 0 ? lastCat + 1 : order.includes('friends') ? order.indexOf('friends') + 1 : -1) : k === 'broadcast' && order.includes('groups') ? order.indexOf('groups') + 1 : -1;
