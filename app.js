@@ -297,7 +297,7 @@ function setTab(t){
   if (t === 'updates') { seenUpdates = Date.now(); saveLocal(); }
   renderHome();
 }
-document.querySelectorAll('.tabbar [data-tab]').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
+{ const nb = document.querySelector('.tabbar [data-tab="contacts"]'); if (nb) nb.dataset.tab = 'cat:' + DEFAULT_CAT; } document.querySelectorAll('.tabbar [data-tab]').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
 document.querySelectorAll('[data-section]').forEach(b => b.addEventListener('click', () => setTab(tab === b.dataset.section ? null : b.dataset.section)));
 
 /* ---------- Firebase ---------- */
@@ -567,16 +567,16 @@ function renderContacts(){
   const q = friends ? '' : $('search').value.trim().toLowerCase();
   const ids = Object.keys(contacts).filter(id => !gone[id] && (!friends || !isBlocked(id)));
   if (!ids.length) { list.append(el('div', 'empty', 'ما عندك جهات اتصال. اضغط "إضافة" تحت واكتب رمز PIN حق صاحبك.')); return; }
-  const cats = [...new Set([...(me.cats || [DEFAULT_CAT]), ...ids.map(id => contacts[id].cat || DEFAULT_CAT)])];
+  const cats = friends ? [null] : [...new Set([...(me.cats || [DEFAULT_CAT]), ...ids.map(id => contacts[id].cat || DEFAULT_CAT)])];
   cats.forEach(cat => {
-    const inCat = ids.filter(id => (contacts[id].cat || DEFAULT_CAT) === cat && (!q || nameOf(id).toLowerCase().includes(q)))
+    const inCat = ids.filter(id => (cat === null || (contacts[id].cat || DEFAULT_CAT) === cat) && (!q || nameOf(id).toLowerCase().includes(q)))
       .sort((a, b) => nameOf(a).localeCompare(nameOf(b), 'ar'));
     if (!inCat.length && (q || cats.length > 1)) return;
-    const open = !closedCats[cat] || q;
-    const h = el('button', 'cathead'); h.type = 'button';
+    const open = cat === null || !closedCats[cat] || q;
+    if (cat !== null) { const h = el('button', 'cathead'); h.type = 'button';
     h.append(el('span', 'grow', catLabel(cat)), el('span', 'n', inCat.length), el('span', 'tog', open ? '−' : '+'));
     h.addEventListener('click', () => { closedCats[cat] = !closedCats[cat]; saveLocal(); renderContacts(); });
-    list.append(h);
+    list.append(h); }
     if (!open) return;
     if (!inCat.length) { list.append(el('div', 'empty', 'الفئة فاضية.')); return; }
     const grid = el('div', 'grid');
@@ -597,22 +597,22 @@ function renderContacts(){
 $('search').addEventListener('input', renderContacts);
 
 /* ---------- القائمة القابلة للتعديل ---------- */
-const BUILTIN = ['chats', 'updates', 'contacts', 'friends', 'groups', 'broadcast', 'pending'];
+const BUILTIN = ['chats', 'updates', 'friends', 'groups', 'broadcast', 'pending']; const MAIN_CAT = 'cat:' + DEFAULT_CAT; // كل فئة قسم مستقل
 const BUILTIN_LABEL = { chats: 'الدردشات', updates: 'التحديثات', contacts: 'الأسماء', friends: 'الأصدقاء', broadcast: '📢 بودكاست', groups: 'المجموعات', pending: 'المعلّق' };
 const userCats = () => (me.cats || [DEFAULT_CAT]).filter(c => c !== DEFAULT_CAT);
 const defaultLabel = k => k.startsWith('cat:') ? k.slice(4) : BUILTIN_LABEL[k];
 function menuCfg(src = me.menu, cats = userCats()){
-  const m = src || {}, all = [...BUILTIN, ...cats.map(c => 'cat:' + c)];
+  const m = src || {}, all = [...BUILTIN, MAIN_CAT, ...cats.map(c => 'cat:' + c)];
   const order = (m.order || []).filter(k => all.includes(k));
   all.forEach(k => {
     if (order.includes(k)) return;
-    const at = k.startsWith('cat:') ? order.indexOf('contacts') : k === 'broadcast' && order.includes('groups') ? order.indexOf('groups') + 1 : -1;
+    const lastCat = order.reduce((p, x, j) => x.startsWith('cat:') ? j : p, -1); const at = k.startsWith('cat:') ? (lastCat >= 0 ? lastCat + 1 : order.includes('friends') ? order.indexOf('friends') + 1 : -1) : k === 'broadcast' && order.includes('groups') ? order.indexOf('groups') + 1 : -1;
     at >= 0 ? order.splice(at, 0, k) : order.push(k);
   });
   return { order, labels: { ...(m.labels || {}) }, hidden: (m.hidden || []).filter(k => all.includes(k)) };
 }
 const labelOf = (k, cfg = menuCfg()) => (cfg.labels[k] || '').trim() || defaultLabel(k);
-const catLabel = c => c === DEFAULT_CAT ? c : labelOf('cat:' + c);
+const catLabel = c => labelOf('cat:' + c);
 const catDom = {};
 function catSection(key){
   if (catDom[key]) return catDom[key];
@@ -627,7 +627,7 @@ function catSection(key){
   return catDom[key] = { btn, panel, list };
 }
 function buildMenu(){
-  const cfg = menuCfg(), menu = document.querySelector('#s-home .classic-menu'), tail = $('menuEditBtn');
+  const cfg = menuCfg(), menu = document.querySelector('#s-home .classic-menu'), tail = $('menuEditBtn'); ['contacts'].forEach(k => { const b = menu.querySelector('[data-section="' + k + '"]'); if (b) { b.hidden = true; const p = document.getElementById(b.getAttribute('aria-controls')); if (p) p.hidden = true; } });
   Object.keys(catDom).forEach(k => { if (!cfg.order.includes(k)) { catDom[k].btn.remove(); catDom[k].panel.remove(); delete catDom[k]; } });
   cfg.order.forEach(k => {
     let btn, panel;
@@ -682,13 +682,13 @@ function renderMenuEdit(){
     const move = dir => { const j = i + dir; if (j < 0 || j >= menuDraft.order.length) return; [menuDraft.order[i], menuDraft.order[j]] = [menuDraft.order[j], menuDraft.order[i]]; renderMenuEdit(); };
     row.append(inp, mk('▲', '', () => move(-1)), mk('▼', '', () => move(1)),
       mk(off ? 'إظهار' : 'إخفاء', '', () => { menuDraft.hidden = off ? menuDraft.hidden.filter(x => x !== k) : [...menuDraft.hidden, k]; renderMenuEdit(); }));
-    if (k.startsWith('cat:')) row.append(mk('حذف', 'del', () => {
+    if (k.startsWith('cat:') && k !== MAIN_CAT) row.append(mk('حذف', 'del', () => {
       const name = k.slice(4);
       menuDraft.order = menuDraft.order.filter(x => x !== k); menuDraft.hidden = menuDraft.hidden.filter(x => x !== k);
       delete menuDraft.labels[k]; menuDraft.cats = menuDraft.cats.filter(c => c !== name); menuDraft.removed.push(name);
       renderMenuEdit();
     }));
-    else if (k === 'contacts' || k === 'chats') row.append(el('span', 'tag', 'أساسي'));
+    else if (k === MAIN_CAT || k === 'chats') row.append(el('span', 'tag', 'أساسي'));
     box.append(row);
   });
 }
@@ -697,7 +697,7 @@ $('menuAddCat').addEventListener('click', () => {
   if (!name) return;
   if (name === DEFAULT_CAT || menuDraft.cats.includes(name)) { toast('الفئة موجودة'); return; }
   menuDraft.cats.push(name); menuDraft.removed = menuDraft.removed.filter(c => c !== name);
-  const at = menuDraft.order.indexOf('contacts'); menuDraft.order.splice(at >= 0 ? at : menuDraft.order.length, 0, 'cat:' + name);
+  const lastCat = menuDraft.order.reduce((p, x, j) => x.startsWith('cat:') ? j : p, -1); menuDraft.order.splice(lastCat >= 0 ? lastCat + 1 : menuDraft.order.length, 0, 'cat:' + name);
   $('menuNewCat').value = ''; renderMenuEdit();
 });
 $('menuReset').addEventListener('click', () => {
@@ -706,7 +706,7 @@ $('menuReset').addEventListener('click', () => {
 });
 $('menuSave').addEventListener('click', async () => {
   // الأساسية ما تنخفي كلها: لازم تبقى الدردشات أو الأسماء ظاهرة
-  if (menuDraft.hidden.includes('chats') && menuDraft.hidden.includes('contacts')) { toast('خلّ الدردشات أو الأسماء ظاهرة'); return; }
+  if (menuDraft.hidden.includes('chats') && menuDraft.hidden.includes(MAIN_CAT)) { toast('خلّ الدردشات أو جهات الاتصال ظاهرة'); return; }
   const labels = {};
   Object.entries(menuDraft.labels).forEach(([k, v]) => { v = (v || '').trim().slice(0, 40); if (v && v !== defaultLabel(k)) labels[k] = v; });
   const menu = { order: menuDraft.order, labels, hidden: menuDraft.hidden };
