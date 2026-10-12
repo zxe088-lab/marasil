@@ -72,8 +72,14 @@ jobs:
 
       - name: Upload to TestFlight
         run: |
-          app-store-connect publish --path build/ios/ipa/*.ipa || {
-            echo "::error::Upload failed. If the app record does not exist yet, create it in App Store Connect (Apps > + > New App) with bundle ID $BUNDLE_ID, then run again."
+          echo "::group::Apps on this account"
+          app-store-connect apps list 2>&1 | tee apps.txt || true
+          echo "::endgroup::"
+          grep -q "$BUNDLE_ID" apps.txt && echo "::notice::App record found for $BUNDLE_ID" || echo "::warning::No App Store Connect app record with bundle ID $BUNDLE_ID"
+          set -o pipefail
+          app-store-connect publish --path build/ios/ipa/*.ipa 2>&1 | tee publish.txt || {
+            msg=$(grep -iE "error|fail|not|exist|invalid|denied" publish.txt | tail -5 | tr '\n' ' ' | cut -c1-900)
+            echo "::error::Upload failed: $msg"
             exit 1; }
 
       - name: Save ipa and logs
