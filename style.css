@@ -366,3 +366,6 @@ form.composer .composer-write input{flex:1;width:0;min-width:0;border:0;backgrou
 .classic-category.selected .category-toggle{border-color:#fff;color:#5cc8ff}
 .classic-category[data-section="updates"] .category-toggle{display:none}
 .classic-category[data-section="updates"] .cat-ic{order:-2;margin-inline-end:8px}
+/* + بأسلوب بلاك بيري: حلقة زرقاء رفيعة و+ أزرق، وفي القسم المحدد أبيض */
+.classic-category .category-toggle{width:24px;height:24px;background:linear-gradient(#ffffff,#e3eaf0);color:#1a7fd6;border:2px solid #1a7fd6;box-shadow:none;font-size:20px;font-weight:400;text-shadow:none}
+.classic-category.selected .category-toggle{background:transparent;color:#fff;border-color:#fff}
