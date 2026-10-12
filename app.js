@@ -598,7 +598,7 @@ $('search').addEventListener('input', renderContacts);
 
 /* ---------- القائمة القابلة للتعديل ---------- */
 const BUILTIN = ['chats', 'updates', 'friends', 'groups', 'broadcast', 'pending']; const MAIN_CAT = 'cat:' + DEFAULT_CAT; // كل فئة قسم مستقل
-const BUILTIN_LABEL = { chats: 'الدردشات', updates: 'التحديثات', contacts: 'الأسماء', friends: 'الأصدقاء', broadcast: '📢 بودكاست', groups: 'المجموعات', pending: 'المعلّق' };
+const BUILTIN_LABEL = { chats: 'الدردشات', updates: 'التحديثات', contacts: 'الأسماء', friends: 'الأصدقاء', broadcast: '📢 برودكاست', groups: 'المجموعات', pending: 'المعلّق' };
 const userCats = () => (me.cats || [DEFAULT_CAT]).filter(c => c !== DEFAULT_CAT);
 const defaultLabel = k => k.startsWith('cat:') ? k.slice(4) : BUILTIN_LABEL[k];
 function menuCfg(src = me.menu, cats = userCats()){
@@ -1444,7 +1444,7 @@ $('bcForm').addEventListener('submit', async e => {
   }
   bcBusy = false; $('bcSend').disabled = false; $('bcSend').textContent = '📢 إرسال';
   if (ok) play('sent');
-  if (ok === ids.length) { toast('وصل البودكاست لـ ' + ok + ' ✅'); show('s-home'); }
+  if (ok === ids.length) { toast('وصل البرودكاست لـ ' + ok + ' ✅'); show('s-home'); }
   else toast('وصلت لـ ' + ok + ' من ' + ids.length + '، الباقي ما وصل');
 });
 
