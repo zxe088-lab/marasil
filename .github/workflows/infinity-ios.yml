@@ -1,0 +1,87 @@
+# بناء تطبيق Infinity Player (Expo) للآيفون ورفعه لـ TestFlight
+# الكود من مستودع zxe088-lab/infinity-player، والتوقيع بنفس مفاتيح App Store Connect الموجودة هنا
+name: Infinity Player - iOS (TestFlight)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch/tag of infinity-player"
+        required: false
+        default: main
+
+jobs:
+  ios-release:
+    runs-on: macos-26
+    timeout-minutes: 90
+    env:
+      BUNDLE_ID: com.khalidalnashri.infinityplayer
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+      APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_IDENTIFIER }}
+      APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+      CERTIFICATE_PRIVATE_KEY: ${{ secrets.CERTIFICATE_PRIVATE_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: zxe088-lab/infinity-player
+          ref: ${{ inputs.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Install Codemagic CLI tools
+        run: pip3 install --break-system-packages codemagic-cli-tools || pip3 install codemagic-cli-tools
+
+      - name: Install packages and test
+        run: |
+          npm ci
+          npm test
+          grep -q '"bundleIdentifier": "com.khalidalnashri.infinityplayer"' app.json
+
+      - name: Create iOS project (expo prebuild)
+        run: |
+          npx expo prebuild --platform ios --clean
+          ls ios
+
+      - name: App settings
+        run: |
+          WS=$(ls -d ios/*.xcworkspace | head -1); NAME=$(basename "$WS" .xcworkspace)
+          echo "XCODE_WORKSPACE=$WS" >> "$GITHUB_ENV"; echo "XCODE_SCHEME=$NAME" >> "$GITHUB_ENV"
+          PLIST="ios/$NAME/Info.plist"
+          /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" "$PLIST" || /usr/libexec/PlistBuddy -c "Set :ITSAppUsesNonExemptEncryption false" "$PLIST"
+          BUILD=$(date -u +%Y%m%d%H%M)
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" "$PLIST"
+          sed -i '' "s/CURRENT_PROJECT_VERSION = [^;]*;/CURRENT_PROJECT_VERSION = $BUILD;/g" "ios/$NAME.xcodeproj/project.pbxproj"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$PLIST"
+
+      - name: Code signing
+        run: |
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_STORE --create
+          keychain add-certificates
+          xcode-project use-profiles
+
+      - name: Build ipa
+        run: xcode-project build-ipa --workspace "$XCODE_WORKSPACE" --scheme "$XCODE_SCHEME"
+
+      - name: Upload to TestFlight
+        run: |
+          app-store-connect publish --path build/ios/ipa/*.ipa || {
+            echo "::error::Upload failed. If the app record does not exist yet, create it in App Store Connect (Apps > + > New App) with bundle ID $BUNDLE_ID, then run again."
+            exit 1; }
+
+      - name: Save ipa and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: infinity-ios-build
+          path: |
+            build/ios/ipa/*.ipa
+            /tmp/xcodebuild_logs/*.log
+          if-no-files-found: ignore
