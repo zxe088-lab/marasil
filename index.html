@@ -13,12 +13,12 @@
 <link rel="manifest" href="manifest.json">
 <title>BPB OLD</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=34">
+<link rel="stylesheet" href="style.css?v=35">
 </head>
 <body>
 <!-- أيقونات -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-  <symbol id="i-updates" viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 13.7-5.6M20 12a8 8 0 0 1-13.7 5.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M18.5 2.5v4.5H14M5.5 21.5V17H10" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-updates" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9.5" cy="7.5" r="3.6"/><path d="M2.8 21v-1.2a6.7 6.7 0 0 1 13.4 0V21z"/><path d="M15.6 5.4a3.4 3.4 0 0 1 0 4.4M18.3 3.4a6.4 6.4 0 0 1 0 8.4"/></g></symbol>
   <symbol id="i-chats" viewBox="0 0 24 24"><path d="M3 4h18v12H9l-5 4v-4H3z" fill="currentColor"/><g fill="#1c2023"><circle cx="8" cy="8.5" r="1.2"/><circle cx="12" cy="8.5" r="1.2"/><circle cx="16" cy="8.5" r="1.2"/><circle cx="10" cy="12" r="1.2"/><circle cx="14" cy="12" r="1.2"/></g></symbol>
   <symbol id="i-contacts" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4.2" fill="currentColor"/><path d="M3.5 21c.8-4.6 4.2-7 8.5-7s7.7 2.4 8.5 7z" fill="currentColor"/></symbol>
   <symbol id="i-add" viewBox="0 0 24 24"><circle cx="10" cy="8" r="4" fill="currentColor"/><path d="M2 21c.7-4.4 3.8-6.8 8-6.8 1.6 0 3 .3 4.2 1" fill="currentColor"/><path d="M19 13v8M15 17h8" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></symbol>
@@ -72,7 +72,7 @@
     <div class="classic-menu scroll">
 <button type="button" class="classic-edit join-banner" id="joinReqBtn" hidden>👑 طلبات انضمام جديدة <span id="joinReqCount"></span></button>
 <button type="button" class="classic-category" data-section="chats" aria-expanded="false" aria-controls="t-chats"><span><span class="cl">الدردشات</span> <span id="classicChatsCount">(0)</span></span><span class="category-toggle">+</span></button><div class="classic-panel" id="t-chats" hidden><div class="scroll" id="chatList"></div></div>
-<button type="button" class="classic-category" data-section="updates" aria-expanded="false" aria-controls="t-updates"><span><span class="cl">التحديثات</span> <span id="classicUpdatesCount">(0)</span></span><span class="category-toggle">+</span></button><div class="classic-panel" id="t-updates" hidden><div class="scroll" id="updatesList"></div></div>
+<button type="button" class="classic-category" data-section="updates" aria-expanded="false" aria-controls="t-updates"><span><span class="cl">التحديثات</span> <span id="classicUpdatesCount">(0)</span><svg class="cat-ic" aria-hidden="true"><use href="#i-updates"/></svg></span><span class="category-toggle">+</span></button><div class="classic-panel" id="t-updates" hidden><div class="scroll" id="updatesList"></div></div>
 <button type="button" class="classic-category" data-section="contacts" aria-expanded="false" aria-controls="t-contacts"><span><span class="cl">الأسماء</span> <span id="classicNamesCount">(0)</span></span><span class="category-toggle">+</span></button><div class="classic-panel" id="t-contacts" hidden><div class="searchbox"><input id="search" placeholder="بحث في الأسماء" autocomplete="off"></div><div class="scroll" id="contactList"></div></div>
 <button type="button" class="classic-category" data-section="friends" aria-expanded="false" aria-controls="t-friends"><span><span class="cl">الأصدقاء</span> <span id="classicFriendsCount">(0)</span></span><span class="category-toggle">+</span></button><div class="classic-panel" id="t-friends" hidden><div class="scroll" id="friendsList"></div></div>
 <button type="button" class="classic-category" data-section="groups" aria-expanded="false" aria-controls="t-groups"><span><span class="cl">المجموعات</span> <span id="classicGroupsCount">(0)</span></span><span class="category-toggle">+</span></button><div class="classic-panel" id="t-groups" hidden><div class="scroll" id="groupsList"></div></div>
@@ -288,7 +288,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="app.js?v=34"></script>
+<script src="app.js?v=35"></script>
 </body>
 </html>
 
