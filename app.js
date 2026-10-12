@@ -149,12 +149,34 @@ function tone(notes){
     t += dur * 0.85;
   }
 }
-const SOUNDS = {
-  incoming: () => tone([[1046.5, .12, 'triangle'], [1318.5, .12, 'triangle'], [1568, .22, 'triangle']]),
-  sent:     () => tone([[880, .07, 'sine', .08], [1174.7, .1, 'sine', .08]]),
-  ping:     () => tone([[1760, .08, 'square', .1], [0, .05], [1760, .08, 'square', .1], [0, .05], [1760, .08, 'square', .1], [0, .12], [2093, .25, 'square', .1]]),
-  contact:  () => tone([[659.3, .15, 'sine'], [987.8, .3, 'sine']]),
+const TONE_NOTES = {
+  incoming: [[1046.5, .12, 'triangle'], [1318.5, .12, 'triangle'], [1568, .22, 'triangle']],
+  sent:     [[880, .07, 'sine', .08], [1174.7, .1, 'sine', .08]],
+  ping:     [[1760, .08, 'square', .1], [0, .05], [1760, .08, 'square', .1], [0, .05], [1760, .08, 'square', .1], [0, .12], [2093, .25, 'square', .1]],
+  contact:  [[659.3, .15, 'sine'], [987.8, .3, 'sine']],
 };
+const SOUNDS = Object.fromEntries(Object.entries(TONE_NOTES).map(([k, n]) => [k, () => tone(n)]));
+// نفس النغمة كملف WAV (للتشغيل عبر عنصر audio في تطبيق الآيفون)
+function synthWav(notes){
+  const rate = 22050; let t = 0.02; const parts = [];
+  for (const [freq, dur, type = 'sine', vol = 0.18] of notes) { if (freq) parts.push([t, freq, dur, type, Math.min(vol * 2.2, 0.6)]); t += dur * 0.85; }
+  const len = Math.ceil((t + 0.4) * rate), pcm = new Float32Array(len);
+  for (const [st, freq, dur, type, vol] of parts) {
+    const a = Math.floor(st * rate), n = Math.floor((dur + 0.02) * rate);
+    for (let i = 0; i < n && a + i < len; i++) {
+      const x = i / rate, ph = (x * freq) % 1;
+      const w = type === 'square' ? (ph < .5 ? 1 : -1) * .6 : type === 'triangle' ? 1 - 4 * Math.abs(ph - .5) : Math.sin(2 * Math.PI * ph);
+      const env = x < .01 ? x / .01 : Math.max(0, Math.exp(Math.log(.001 / 1) * (x - .01) / Math.max(dur - .01, .01)));
+      pcm[a + i] += w * vol * env;
+    }
+  }
+  const buf = new DataView(new ArrayBuffer(44 + len * 2)), str = (o, v) => [...v].forEach((c, i) => buf.setUint8(o + i, c.charCodeAt(0)));
+  str(0, 'RIFF'); buf.setUint32(4, 36 + len * 2, true); str(8, 'WAVEfmt '); buf.setUint32(16, 16, true); buf.setUint16(20, 1, true); buf.setUint16(22, 1, true);
+  buf.setUint32(24, rate, true); buf.setUint32(28, rate * 2, true); buf.setUint16(32, 2, true); buf.setUint16(34, 16, true); str(36, 'data'); buf.setUint32(40, len * 2, true);
+  for (let i = 0; i < len; i++) buf.setInt16(44 + i * 2, Math.max(-1, Math.min(1, pcm[i])) * 32767, true);
+  let bin = ''; const u8 = new Uint8Array(buf.buffer); for (let i = 0; i < u8.length; i += 8192) bin += String.fromCharCode.apply(null, u8.subarray(i, i + 8192));
+  return 'data:audio/wav;base64,' + btoa(bin);
+}
 /* نغمات خاصة: 1) ملف يختاره الشخص من جواله (محفوظ في جهازه)  2) ملف في مجلد sounds على السيرفر  3) النغمة الافتراضية */
 const TONE_NAMES = { incoming: 'رسالة واردة', ping: 'الوكزة PING', sent: 'إرسال رسالة', contact: 'تحديثات الأصحاب' };
 // تشغيل ملفات النغمات عبر عنصر audio، مع احترام قيود التشغيل في النظام.
@@ -165,7 +187,10 @@ async function loadTone(name){
   let src = null;
   try { src = localStorage.getItem('marasil-tone-' + name); } catch {}
   if (src) toneOrigin[name] = 'device';
-  else if (name === 'incoming' || name === 'ping') {
+  else if (IS_NATIVE && TONE_NOTES[name]) {
+    // تطبيق الآيفون: ملف bbm.mp3 غير موجود فيه، فنشغّل نغمات التطبيق كملف صوت
+    src = synthWav(TONE_NOTES[name]); toneOrigin[name] = 'app';
+  } else if (name === 'incoming' || name === 'ping') {
     src = 'sounds/bbm.mp3'; toneOrigin[name] = 'site';
   } else {
     for (const ext of ['mp3', 'm4a', 'wav', 'ogg']) {
@@ -214,7 +239,7 @@ function renderTonePicker(){
     const row = el('div', 'tonerow');
     const lab = el('span', 'tn-label', label);
     const st = el('span', 'tn-state');
-    const refresh = () => { st.textContent = toneOrigin[name] === 'device' ? 'نغمة من جهازك' : toneOrigin[name] === 'site' ? 'نغمة التطبيق' : 'افتراضية'; };
+    const refresh = () => { st.textContent = toneOrigin[name] === 'device' ? 'نغمة من جهازك' : toneOrigin[name] === 'site' || toneOrigin[name] === 'app' ? 'نغمة التطبيق' : 'افتراضية'; };
     loadTone(name).then(refresh);
     const pick = el('button', 'btn sm', 'اختيار'); pick.type = 'button';
     const test = el('button', 'btn sm', '▶'); test.type = 'button'; test.title = 'تجربة';
