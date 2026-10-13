@@ -13,7 +13,7 @@
 <link rel="manifest" href="manifest.json">
 <title>BPB OLD</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=38">
+<link rel="stylesheet" href="style.css?v=39">
 </head>
 <body>
 <!-- أيقونات -->
@@ -37,6 +37,7 @@
   <section id="s-error" class="screen" hidden>
     <h1>BPB OLD</h1>
     <p id="errText">ما قدرنا نتصل بالسيرفر.</p>
+    <button type="button" class="btn primary" id="errRetry" hidden>حاول مرة ثانية · Try again</button>
   </section>
 
   <section id="s-login" class="screen" hidden>
@@ -51,10 +52,12 @@
     <div class="setup-icon"><svg><use href="#i-chats"/></svg></div>
     <h1>أهلاً في BPB OLD</h1>
     <p id="setupIntro">اكتب اسم العرض حقك وأرسل طلب انضمام. بعد موافقة المالك يوصلك رمز PIN خاص، وأصحابك يضيفونك فيه بدل رقم جوالك.</p>
+    <p class="hint" dir="ltr">Enter a display name, accept the terms, and tap Join. With an invite code you get in immediately; otherwise the owner approves your request.</p>
     <div id="setupForm">
-    <input id="setupName" maxlength="40" placeholder="اسم العرض" autocomplete="off">
-    <label class="check agree"><input type="checkbox" id="agreeTerms"> أوافق على <a href="https://zxe088-lab.github.io/marasil/terms.html" target="_blank" rel="noopener">شروط الاستخدام</a> و<a href="https://zxe088-lab.github.io/marasil/privacy.html" target="_blank" rel="noopener">سياسة الخصوصية</a></label>
-    <button type="button" class="btn primary" id="setupBtn">إرسال طلب الانضمام</button>
+    <input id="setupName" maxlength="40" placeholder="اسم العرض · Display name" autocomplete="off">
+    <input id="setupInvite" maxlength="12" placeholder="Invite code · رمز الدعوة" autocomplete="off" autocapitalize="characters" dir="ltr">
+    <label class="check agree"><input type="checkbox" id="agreeTerms"> I agree · أوافق على <a href="https://zxe088-lab.github.io/marasil/terms.html" target="_blank" rel="noopener">شروط الاستخدام</a> و<a href="https://zxe088-lab.github.io/marasil/privacy.html" target="_blank" rel="noopener">سياسة الخصوصية</a></label>
+    <button type="button" class="btn primary" id="setupBtn">إرسال طلب الانضمام · Join</button>
     </div>
     <div id="setupWait" class="setup-wait" hidden><p id="setupWaitText"></p><button type="button" class="btn" id="setupRetry" hidden>إرسال طلب جديد</button></div>
   </section>
@@ -288,7 +291,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="app.js?v=38"></script>
+<script src="app.js?v=39"></script>
 </body>
 </html>
 

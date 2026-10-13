@@ -334,7 +334,9 @@ function boot(){
   }
   firebase.initializeApp(cfg);
   auth = firebase.auth(); fs = firebase.firestore();
-  auth.onAuthStateChanged(u => { if (u) start(u.uid); else if (IS_NATIVE) anonSignIn(); else show('s-login', false); });
+  auth.onAuthStateChanged(u => { authSeen = true; if (u) start(u.uid); else if (IS_NATIVE) anonSignIn(); else show('s-login', false); });
+  // إذا ما رد Firebase خلال 12 ثانية نعرض زر إعادة المحاولة بدل شاشة تحميل معلّقة
+  setTimeout(() => { if (!authSeen && !uid) authFail('timeout'); }, 12000);
   if (!IS_NATIVE) auth.getRedirectResult?.().then(r => { if (r?.operationType === 'link') toast('تم ربط حسابك بقوقل ✅'); }).catch(authError);
 }
 
@@ -355,10 +357,19 @@ async function googleSignIn(){
   try { await auth.signInWithPopup(gProvider()); }
   catch (e) { if (popupIssue(e)) return auth.signInWithRedirect(gProvider()).catch(authError); authError(e); }
 }
-async function anonSignIn(){
-  try { await auth.signInAnonymously(); }
-  catch (e) { $('errText').textContent = 'ما قدرنا نسجل الدخول. تأكد أنك فعّلت الدخول المجهول (Anonymous) في Firebase.'; show('s-error'); console.error(e); }
+let authSeen = false;
+function authFail(code){
+  $('errText').textContent = 'ما قدرنا نسجل الدخول. تأكد من اتصال الإنترنت وجرّب مرة ثانية.' + (code ? ' (' + code + ')' : '');
+  $('errRetry').hidden = false; show('s-error', false);
 }
+async function anonSignIn(){
+  // نعيد المحاولة تلقائياً 3 مرات قبل عرض الخطأ
+  for (let i = 0; i < 3; i++) {
+    try { await auth.signInAnonymously(); return; }
+    catch (e) { console.error(e); if (i === 2) { authFail(e?.code || 'error'); return; } await new Promise(r => setTimeout(r, 1500 * (i + 1))); }
+  }
+}
+$('errRetry').addEventListener('click', () => { $('errRetry').hidden = true; show('s-loading', false); if (auth?.currentUser) location.reload(); else if (auth) anonSignIn(); else location.reload(); });
 async function linkGoogle(){
   const u = auth.currentUser; if (!u) return;
   try { await u.linkWithPopup(gProvider()); await u.reload(); toast('تم ربط حسابك بقوقل ✅'); renderAccount(); }
@@ -453,22 +464,29 @@ function start(id){
 
 $('setupBtn').addEventListener('click', async () => {
   const name = $('setupName').value.trim();
-  if (!name) { toast('اكتب اسم العرض'); return; }
-  if (!$('agreeTerms').checked) { toast('لازم توافق على شروط الاستخدام'); return; }
+  if (!name) { toast('اكتب اسم العرض · Enter a display name'); return; }
+  if (!$('agreeTerms').checked) { toast('لازم توافق على شروط الاستخدام · Please accept the terms'); return; }
   $('setupBtn').disabled = true;
+  const invite = ($('setupInvite')?.value || '').trim().toUpperCase();
   try {
-    if (isOwner(uid)) {
+    if (isOwner(uid) || (invite && inviteOk(invite))) {
       let pin;
       for (let i = 0; i < 5; i++) { pin = newPin(); if (!(await fs.doc('pins/' + pin).get()).exists) break; }
       await fs.doc('pins/' + pin).set({ uid });
       await createMe(name, pin);
     } else {
       // طلب انضمام: المالك يوافق ويحدد رمز PIN
+      if (invite) { toast('رمز الدعوة غير صحيح · Invalid invite code'); $('setupBtn').disabled = false; return; }
       await fs.doc('joinRequests/' + uid).set({ name, at: Date.now(), status: 'pending' });
     }
-  } catch (e) { console.error(e); toast('صار خطأ، جرّب مرة ثانية'); }
+  } catch (e) { console.error(e); toast('صار خطأ، جرّب مرة ثانية' + (e?.code ? ' (' + e.code + ')' : '')); }
   $('setupBtn').disabled = false;
 });
+
+// رمز دعوة يتخطى انتظار الموافقة (يُعطى لمراجع آبل في ملاحظات المراجعة). نخزن البصمة فقط
+const INVITE_HASHES = ['2ah47uqytni'];
+function inviteHash(s){let h1=0xdeadbeef,h2=0x41c6ce57;for(let i=0,ch;i<s.length;i++){ch=s.charCodeAt(i);h1=Math.imul(h1^ch,2654435761);h2=Math.imul(h2^ch,1597334677);}h1=Math.imul(h1^(h1>>>16),2246822507);h1^=Math.imul(h2^(h2>>>13),3266489909);h2=Math.imul(h2^(h2>>>16),2246822507);h2^=Math.imul(h1^(h1>>>13),3266489909);return (4294967296*(2097151&h2)+(h1>>>0)).toString(36);}
+const inviteOk = code => INVITE_HASHES.includes(inviteHash('bpb-invite:' + code));
 
 function heartbeat(){
   const beat = () => { if (document.visibilityState === 'visible') fs.doc('users/' + uid).update({ lastSeen: Date.now() }).catch(() => {}); };
