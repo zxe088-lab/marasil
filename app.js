@@ -178,7 +178,7 @@ function synthWav(notes){
   return 'data:audio/wav;base64,' + btoa(bin);
 }
 /* نغمات خاصة: 1) ملف يختاره الشخص من جواله (محفوظ في جهازه)  2) ملف في مجلد sounds على السيرفر  3) النغمة الافتراضية */
-const TONE_NAMES = { incoming: 'رسالة واردة (وتُستخدم للوكزة)', sent: 'إرسال رسالة', contact: 'تحديثات الأصحاب' };
+const TONE_NAMES = { sent: 'إرسال رسالة', contact: 'تحديثات الأصحاب' };
 // تشغيل ملفات النغمات عبر عنصر audio، مع احترام قيود التشغيل في النظام.
 const toneEls = {};      // name -> Audio
 const toneOrigin = {};   // 'device' | 'site'
@@ -265,6 +265,49 @@ function renderTonePicker(){
     const btns = el('span', 'tn-btns'); btns.append(pick, test, reset);
     const info = el('span', 'tn-info'); info.append(lab, st);
     row.append(info, btns, inp); box.append(row);
+  });
+}
+// إشعارات الرسائل: لكل نوع (أصدقاء / مجموعات / برودكاست) نغمة + كتم + إشعار خارج التطبيق
+// النغمات موجودة داخل التطبيق نفسه عشان آيفون يقدر يشغّلها في الإشعار وهو مقفل
+const MSG_TONES = { bbm: 'BBM الأصلية', classic: 'كلاسيك', chime: 'رنّة', bell: 'جرس', pop: 'فقاعة', alert: 'تنبيه' };
+const NOTIF_CATS = { friends: 'رسائل الأصدقاء', groups: 'رسائل المجموعات', broadcast: 'رسائل البرودكاست' };
+const NOTIF_DEFAULT = { tone: 'bbm', mute: false, push: true };
+const notifPref = cat => ({ ...NOTIF_DEFAULT, ...(me?.notif?.[cat] || {}) });
+const chatCat = c => c?.isGroup ? 'groups' : c?.lastKind === 'broadcast' ? 'broadcast' : 'friends';
+const toneFile = t => (t === 'bbm' || !MSG_TONES[t]) ? 'sounds/bbm.mp3' : 'sounds/' + t + '.wav';
+const msgToneEls = {};
+Object.keys(MSG_TONES).forEach(t => { const a = new Audio(toneFile(t)); a.preload = 'auto'; msgToneEls[t] = a; });
+document.addEventListener('pointerdown', () => {
+  Object.values(msgToneEls).forEach(a => { a.muted = true; a.play().then(() => { if (!a._want) { a.pause(); try { a.currentTime = 0; } catch {} } a.muted = false; }).catch(() => { a.muted = false; }); });
+}, { once: true, capture: true });
+function playMsgTone(t, force){
+  if (me?.mute && !force) return;
+  const a = msgToneEls[MSG_TONES[t] ? t : 'bbm'];
+  a._want = true; a.muted = false; try { a.currentTime = 0; } catch {}
+  a.play()?.catch(() => SOUNDS.incoming?.());
+}
+function renderNotifSettings(){
+  const box = $('notifList'); if (!box) return;
+  box.replaceChildren();
+  Object.entries(NOTIF_CATS).forEach(([cat, label]) => {
+    const p = notifPref(cat), row = el('div', 'notifcat');
+    const save = (fields, msg) => { const n = { ...(me.notif || {}) }; n[cat] = { ...notifPref(cat), ...fields }; saveMe({ notif: n }, null, msg); };
+    const sel = el('select', 'notif-tone');
+    Object.entries(MSG_TONES).forEach(([k, v]) => { const o = el('option', null, v); o.value = k; sel.append(o); });
+    sel.value = p.tone;
+    sel.onchange = () => { playMsgTone(sel.value, true); save({ tone: sel.value }, 'تم تغيير نغمة ' + label); };
+    const test = el('button', 'btn sm', '▶'); test.type = 'button'; test.title = 'تجربة';
+    test.onclick = () => playMsgTone(sel.value, true);
+    const chk = (text, key, on, onMsg, offMsg) => {
+      const l = el('label', 'check'), i = el('input'); i.type = 'checkbox'; i.checked = on;
+      i.onchange = () => save({ [key]: i.checked }, i.checked ? onMsg : offMsg);
+      l.append(i, document.createTextNode(' ' + text)); return l;
+    };
+    const line = el('div', 'line'); line.append(sel, test);
+    row.append(el('div', 'tn-label', label), line,
+      chk('كتم (بدون صوت ولا اهتزاز)', 'mute', p.mute, 'تم كتم ' + label, 'رجع صوت ' + label),
+      chk('إشعار على الجوال وأنا خارج التطبيق', 'push', p.push, 'إشعارات ' + label + ' شغالة', 'تم إيقاف إشعارات ' + label));
+    box.append(row);
   });
 }
 const buzz = pattern => {
@@ -514,7 +557,7 @@ function start(id){
     const had = !!me; me = s.exists ? s.data() : null;
     if (!me) { show('s-setup', false); watchMyJoin(); return; }
     if (!had) {
-      show('s-home', false); listen(); heartbeat();
+      show('s-home', false); listen(); heartbeat(); setupPush();
       // ميزة تغيير الرمز لصاحب التطبيق فقط (مسجّل في مجموعة admins)
       $('pinAdminCard').hidden = !isOwner(uid);
       if (isOwner(uid)) watchJoinRequests();
@@ -549,6 +592,22 @@ const INVITE_HASHES = ['2ah47uqytni'];
 function inviteHash(s){let h1=0xdeadbeef,h2=0x41c6ce57;for(let i=0,ch;i<s.length;i++){ch=s.charCodeAt(i);h1=Math.imul(h1^ch,2654435761);h2=Math.imul(h2^ch,1597334677);}h1=Math.imul(h1^(h1>>>16),2246822507);h1^=Math.imul(h2^(h2>>>13),3266489909);h2=Math.imul(h2^(h2>>>16),2246822507);h2^=Math.imul(h1^(h1>>>13),3266489909);return (4294967296*(2097151&h2)+(h1>>>0)).toString(36);}
 const inviteOk = code => INVITE_HASHES.includes(inviteHash('bpb-invite:' + code));
 
+// إشعارات الآيفون وأنت خارج التطبيق: نحفظ رمز الجهاز في ملفك، والسيرفر يرسل التنبيه
+const Push = IS_NATIVE ? window.Capacitor?.Plugins?.PushNotifications : null;
+async function setupPush(){
+  if (!Push) return;
+  try {
+    Push.addListener('registration', t => {
+      if (t?.value && me?.apns !== t.value) fs.doc('users/' + uid).update({ apns: t.value }).catch(console.error);
+    });
+    Push.addListener('registrationError', e => console.error('push', e));
+    let p = await Push.checkPermissions();
+    if (p.receive === 'prompt' || p.receive === 'prompt-with-rationale') p = await Push.requestPermissions();
+    if (p.receive === 'granted') await Push.register();
+    const clear = () => { if (document.visibilityState === 'visible') Push.removeAllDeliveredNotifications?.().catch(() => {}); };
+    clear(); document.addEventListener('visibilitychange', clear);
+  } catch (e) { console.error('push', e); }
+}
 function heartbeat(){
   const beat = () => { if (document.visibilityState === 'visible') fs.doc('users/' + uid).update({ lastSeen: Date.now() }).catch(() => {}); };
   beat(); setInterval(beat, 4 * 60 * 1000);
@@ -594,8 +653,9 @@ function listen(){
       if (!firstChatsSnap && c.type !== 'removed' && d.lastFrom && d.lastFrom !== uid && !isBlocked(d.lastFrom) && d.lastTs > (chats[c.doc.id]?.lastTs || 0)) {
         const viewing = c.doc.id === chatId && document.visibilityState === 'visible';
         ledFlash();
-        if (d.lastKind === 'ping') { nudgeEffect(); play('ping'); }
-        else if (!viewing) { play('incoming'); buzz(200); }
+        const pref = notifPref(chatCat(d));
+        if (d.lastKind === 'ping') { nudgeEffect(); if (!pref.mute) playMsgTone(pref.tone); }
+        else if (!viewing && !pref.mute) { playMsgTone(pref.tone); buzz(200); }
       }
     });
     chats = {}; s.docs.forEach(d => chats[d.id] = d.data());
@@ -1000,7 +1060,7 @@ function renderProfile(){
     $('setAvail').setAttribute('aria-pressed', !me.busy && !me.stText); $('setBusy').setAttribute('aria-pressed', !!me.busy && !me.stText);
     renderCustomStatuses();
     $('photoDel').hidden = !me.photo;
-    renderTonePicker();
+    renderTonePicker(); renderNotifSettings();
     renderAccount();
   } else {
     fillCatSelect($('pfCat'), contacts[id]?.cat);
@@ -1155,7 +1215,8 @@ async function openChat(peer){
       msgs = s.docs.map(d => ({ id: d.id, pending: d.metadata.hasPendingWrites, ...d.data() })).reverse();
       if (!firstMsgsSnap) {
         const fresh = s.docChanges().filter(c => c.type === 'added' && c.doc.data().from !== uid);
-        if (!isBlocked(peer) && fresh.some(c => c.doc.data().kind !== 'ping')) { play('incoming'); buzz(120); }
+        const nw = fresh.find(c => c.doc.data().kind !== 'ping');
+        if (!isBlocked(peer) && nw) { const p = notifPref(nw.doc.data().broadcast ? 'broadcast' : 'friends'); if (!p.mute) { playMsgTone(p.tone); buzz(120); } }
       }
       firstMsgsSnap = false;
       renderMsgs(true);
@@ -1662,7 +1723,7 @@ async function openGroup(gid){
       msgs = s.docs.map(d => ({ id: d.id, pending: d.metadata.hasPendingWrites, ...d.data() })).reverse();
       if (!firstMsgsSnap) {
         const fresh = s.docChanges().filter(c => c.type === 'added' && c.doc.data().from !== uid && !isBlocked(c.doc.data().from));
-        if (fresh.some(c => c.doc.data().kind !== 'ping')) { play('incoming'); buzz(120); }
+        if (fresh.some(c => c.doc.data().kind !== 'ping')) { const p = notifPref('groups'); if (!p.mute) { playMsgTone(p.tone); buzz(120); } }
       }
       firstMsgsSnap = false;
       renderMsgs(true);
