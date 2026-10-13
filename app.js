@@ -187,7 +187,7 @@ async function loadTone(name){
   let src = null;
   try { src = localStorage.getItem('marasil-tone-' + name); } catch {}
   if (src) toneOrigin[name] = 'device';
-  else if (IS_NATIVE && TONE_NOTES[name]) {
+  else if (IS_NATIVE && name !== 'incoming' && name !== 'ping' && TONE_NOTES[name]) {
     // تطبيق الآيفون: ملف bbm.mp3 غير موجود فيه، فنشغّل نغمات التطبيق كملف صوت
     src = synthWav(TONE_NOTES[name]); toneOrigin[name] = 'app';
   } else if (name === 'incoming' || name === 'ping') {

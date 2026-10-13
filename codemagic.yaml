@@ -26,7 +26,7 @@ workflows:
           rm -rf www && mkdir -p www
           cp index.html app.js style.css firebase-config.js manifest.json icon-192.png icon-512.png www/
           for f in privacy.html terms.html; do [ -f "$f" ] && cp "$f" www/; done
-          # sounds/bbm.mp3 is for the website only, not bundled in the App Store build
+          mkdir -p www/sounds && cp sounds/bbm.mp3 www/sounds/
           grep -q 'data-section="pending"' www/index.html
           node --check www/app.js
 

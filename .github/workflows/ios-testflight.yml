@@ -47,7 +47,7 @@ jobs:
           cp blackberry-48.png www/
           for f in privacy.html terms.html; do [ -f "$f" ] && cp "$f" www/; done
           cp -R fonts www/fonts
-          # sounds/bbm.mp3 is for the website only, not bundled in the App Store build
+          mkdir -p www/sounds && cp sounds/bbm.mp3 www/sounds/
           grep -q 'data-section="pending"' www/index.html
           node --check www/app.js
 
