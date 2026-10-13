@@ -105,6 +105,27 @@ jobs:
           </dict>
           </plist>
           EOF
+          # Capacitor يحتاج هذي الدوال عشان يوصل رمز الإشعارات (APNs token) للتطبيق
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("ios/App/App/AppDelegate.swift")
+          s = p.read_text()
+          if "capacitorDidRegisterForRemoteNotifications" not in s:
+              add = '''
+              func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+                  NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)
+              }
+
+              func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+                  NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
+              }
+          '''
+              i = s.rstrip().rfind("}")
+              s = s[:i] + add + s[i:]
+              p.write_text(s)
+          print("AppDelegate push hooks:", "capacitorDidRegisterForRemoteNotifications" in p.read_text())
+          PY
+          grep -q capacitorDidRegisterForRemoteNotifications ios/App/App/AppDelegate.swift
           gem list -i xcodeproj >/dev/null || gem install xcodeproj
           ruby -e '
             require "xcodeproj"
