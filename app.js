@@ -610,6 +610,15 @@ async function setupPush(){
       if (t?.value && me?.apns !== t.value) fs.doc('users/' + uid).update({ apns: t.value }).catch(console.error);
     });
     Push.addListener('registrationError', e => console.error('push', e));
+    Push.addListener('pushNotificationActionPerformed', a => {
+      const cid = a?.notification?.data?.chatId; if (!cid) return;
+      const go = () => {
+        const c = chats[cid]; if (!c) return false;
+        if (c.isGroup) openGroup(cid); else { const p = (c.members || []).find(m => m !== uid); if (p) openChat(p); }
+        return true;
+      };
+      if (!go()) { let n = 0; const t = setInterval(() => { if (go() || ++n > 20) clearInterval(t); }, 500); }
+    });
     let p = await Push.checkPermissions();
     if (p.receive === 'prompt' || p.receive === 'prompt-with-rationale') p = await Push.requestPermissions();
     if (p.receive === 'granted') await Push.register();
@@ -632,7 +641,7 @@ function watchUser(id){
     if (prev && users[id] && prev.updatedAt !== users[id].updatedAt && contacts[id]) play('contact');
     renderHomeSoon();
     if (profileId === id && !$('s-profile').hidden) renderProfile();
-    if (chatPeer === id) { renderChatHead(); renderMsgs(); }
+    if (chatPeer === id) { renderChatHead(); renderMsgsSoon(); }
   });
 }
 
@@ -647,7 +656,7 @@ function listen(){
   fs.collection('users/' + uid + '/blocked').onSnapshot(s => {
     blocked = {}; s.docs.forEach(d => blocked[d.id] = true);
     renderHomeSoon();
-    if (chatPeer) { renderChatHead(); renderMsgs(); }
+    if (chatPeer) { renderChatHead(); renderMsgsSoon(); }
     if (profileId && !$('s-profile').hidden) renderProfile();
   });
   fs.collection('users/' + uid + '/contacts').onSnapshot(s => {
@@ -1217,7 +1226,7 @@ async function openChat(peer){
   chatId = id; chatPeer = peer; chatGroup = null; lastChat = { id: peer, group: false }; msgs = []; curChat = null; firstMsgsSnap = true;
   watchUser(peer); renderChatHead();
   $('msgList').replaceChildren(el('div', 'empty', 'جاري التحميل…'));
-  unsubChat = fs.doc('chats/' + id).onSnapshot(s => { curChat = s.data() || {}; renderMsgs(); renderTyping(); });
+  unsubChat = fs.doc('chats/' + id).onSnapshot(s => { const k = msgsKey(curChat); curChat = s.data() || {}; if (msgsKey(curChat) !== k) renderMsgsSoon(); renderTyping(); });
   cleanExpiredMessages(id);
   unsubMsgs = fs.collection('chats/' + id + '/messages').where('ts','>',Date.now()-MESSAGE_LIFETIME).orderBy('ts', 'desc').limit(30)
     .onSnapshot({ includeMetadataChanges: true }, s => {
@@ -1228,7 +1237,7 @@ async function openChat(peer){
         if (!isBlocked(peer) && nw) { const p = notifPref(nw.doc.data().broadcast ? 'broadcast' : 'friends'); if (!p.mute) { playMsgTone(p.tone); buzz(120); } }
       }
       firstMsgsSnap = false;
-      renderMsgs(true);
+      renderMsgsSoon(true);
     });
 }
 function closeChat(){ chatGroup = null; cancelVoice(); closeOncePhoto(); clearDraftSticker(); toggleFaces(false); unsubMsgs?.(); unsubChat?.(); unsubMsgs = unsubChat = null; chatId = chatPeer = null; }
@@ -1257,6 +1266,14 @@ function renderChatHead(){
 }
 $('chInfo').addEventListener('click', () => chatGroup ? openGroupEditor(chatGroup) : chatPeer && openProfile(chatPeer));
 
+// نجمع طلبات الرسم في إطار واحد، ونعيد رسم الرسائل فقط إذا تغيّر شي يأثر عليها
+let msgsRaf = 0, msgsFrom = false;
+function renderMsgsSoon(fromMsgs){
+  msgsFrom = msgsFrom || !!fromMsgs;
+  if (msgsRaf) return;
+  msgsRaf = requestAnimationFrame(() => { msgsRaf = 0; const f = msgsFrom; msgsFrom = false; renderMsgs(f); });
+}
+const msgsKey = c => JSON.stringify([(c || {}).read || {}, (c || {}).members || [], (c || {}).name || '']);
 function renderMsgs(fromMsgs){
   if (!chatPeer && !chatGroup) return;
   const list = $('msgList'), atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 80;
@@ -1331,10 +1348,10 @@ function renderTyping(){
     $('typing').textContent = who.length ? who.slice(0, 2).map(nameOf).join('، ') + (who.length > 1 ? ' يكتبون…' : ' يكتب…') : '';
     return;
   }
-  const t = typing[chatPeer] || 0;
-  $('typing').textContent = chatPeer && Date.now() - t < 5000 ? nameOf(chatPeer) + ' يكتب…' : '';
+  const t = typing[chatPeer] || 0, txt = chatPeer && Date.now() - t < 5000 ? nameOf(chatPeer) + ' يكتب…' : '';
+  if ($('typing').textContent !== txt) $('typing').textContent = txt;
 }
-setInterval(renderTyping, 1500);
+setInterval(() => { if (!document.hidden && chatId) renderTyping(); }, 1500);
 
 async function sendMsg(data, expectedChat = chatId){
   if (!chatId || chatId !== expectedChat || $('composer').hidden) return false;
@@ -1449,7 +1466,7 @@ $('cameraBtn').onclick=()=>{if(chatId&&!$('composer').hidden)$('chatCameraInput'
 $('chatCameraInput').onchange=()=>{const file=$('chatCameraInput').files[0];$('chatCameraInput').value='';if(file)sendOncePhoto(file);};
 $('closeOnceViewer').onclick=closeOncePhoto;
 document.addEventListener('visibilitychange',()=>{if(document.hidden){cancelVoice();closeOncePhoto();updateComposer();}});
-setInterval(()=>{if(!document.hidden){if(chatId)renderMsgs();renderChats();}},60000);
+setInterval(()=>{if(!document.hidden){if(chatId)renderMsgsSoon();renderChats();}},60000);
 function editorParts(){
   const parts=[];
   const text=value=>{value=value.replace(/\u200b/g,'');if(!value)return;const last=parts[parts.length-1];if(last&&typeof last.text==='string')last.text+=value;else parts.push({text:value});};
@@ -1721,10 +1738,11 @@ async function openGroup(gid){
   $('msgList').replaceChildren(el('div', 'empty', 'جاري التحميل…'));
   unsubChat = fs.doc('chats/' + gid).onSnapshot(s => {
     if (!s.exists) { toast('المجموعة انحذفت'); lastChat = null; show('s-home'); return; }
-    curChat = s.data() || {};
+    const k = msgsKey(curChat); curChat = s.data() || {};
     if (!(curChat.members || []).includes(uid)) { toast('ما عدت عضو في هذي المجموعة'); lastChat = null; show('s-home'); return; }
     (curChat.members || []).forEach(m => m !== uid && watchUser(m));
-    renderChatHead(); renderMsgs(); renderTyping();
+    if (msgsKey(curChat) !== k) { renderChatHead(); renderMsgsSoon(); }
+    renderTyping();
   }, () => { toast('ما قدرنا نفتح المجموعة'); lastChat = null; show('s-home'); });
   cleanExpiredMessages(gid);
   unsubMsgs = fs.collection('chats/' + gid + '/messages').where('ts','>',Date.now()-MESSAGE_LIFETIME).orderBy('ts', 'desc').limit(30)
@@ -1735,7 +1753,7 @@ async function openGroup(gid){
         if (fresh.some(c => c.doc.data().kind !== 'ping')) { const p = notifPref('groups'); if (!p.mute) { playMsgTone(p.tone); buzz(120); } }
       }
       firstMsgsSnap = false;
-      renderMsgs(true);
+      renderMsgsSoon(true);
     }, e => console.error(e));
 }
 
