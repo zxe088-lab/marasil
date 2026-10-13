@@ -135,7 +135,22 @@ function statusText(id){ const d = dataOf(id); return d?.busy || isOnline(id) ||
 /* ---------- النغمات والاهتزاز ---------- */
 let actx = null;
 function audio(){ if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch {} } if (actx?.state === 'suspended') actx.resume(); return actx; }
-document.addEventListener('pointerdown', audio, { once: true });
+['pointerdown', 'touchend', 'keydown'].forEach(ev => document.addEventListener(ev, audio, { capture: true, passive: true }));
+// صوت كتابة خفيف مثل لوحة المفاتيح (يقدر الشخص يقفله من الإعدادات)
+const typingSoundOn = () => { try { return localStorage.getItem('marasil-typing-sound') !== 'off'; } catch { return true; } };
+let lastKeyClick = 0, keyClickBuf = null;
+function keyClick(){
+  if (me?.mute || !typingSoundOn()) return;
+  const now = performance.now(); if (now - lastKeyClick < 40) return; lastKeyClick = now;
+  const ctx = audio(); if (!ctx || ctx.state !== 'running') return;
+  if (!keyClickBuf) {
+    const n = Math.floor(ctx.sampleRate * 0.02); keyClickBuf = ctx.createBuffer(1, n, ctx.sampleRate);
+    const d = keyClickBuf.getChannelData(0); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 4);
+  }
+  const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+  s.buffer = keyClickBuf; f.type = 'bandpass'; f.frequency.value = 2000 + Math.random() * 700; f.Q.value = 1.1; g.gain.value = 0.4;
+  s.connect(f).connect(g).connect(ctx.destination); s.start();
+}
 function tone(notes){
   const ctx = audio(); if (!ctx) return;
   let t = ctx.currentTime + 0.02;
@@ -280,6 +295,10 @@ Object.keys(MSG_TONES).forEach(t => { const a = new Audio(toneFile(t)); a.preloa
 document.addEventListener('pointerdown', () => {
   Object.values(msgToneEls).forEach(a => { a.muted = true; a.play().then(() => { if (!a._want) { a.pause(); try { a.currentTime = 0; } catch {} } a.muted = false; }).catch(() => { a.muted = false; }); });
 }, { once: true, capture: true });
+// الرسائل اللي وصلت وأنت برّا التطبيق نبّهك عليها الإشعار، فما نعيد صوتها لما ترجع للتطبيق
+let hiddenAt = document.visibilityState === 'hidden' ? Date.now() : 0, shownAt = 0;
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') hiddenAt = Date.now(); else shownAt = Date.now(); });
+const arrivedWhileAway = ts => !!(hiddenAt && shownAt > hiddenAt && ts >= hiddenAt - 1000 && ts <= shownAt + 1500 && Date.now() - shownAt < 10000);
 function playMsgTone(t, force){
   if (me?.mute && !force) return;
   const a = msgToneEls[MSG_TONES[t] ? t : 'bbm'];
@@ -671,8 +690,9 @@ function listen(){
       if (!firstChatsSnap && c.type !== 'removed' && d.lastFrom && d.lastFrom !== uid && !isBlocked(d.lastFrom) && d.lastTs > (chats[c.doc.id]?.lastTs || 0)) {
         const viewing = c.doc.id === chatId && document.visibilityState === 'visible';
         ledFlash();
-        const pref = notifPref(chatCat(d));
-        if (d.lastKind === 'ping') { nudgeEffect(); if (!pref.mute) playMsgTone(pref.tone); }
+        const pref = notifPref(chatCat(d)), away = arrivedWhileAway(d.lastTs);
+        if (away) { /* الإشعار نبّه عليها */ }
+        else if (d.lastKind === 'ping') { nudgeEffect(); if (!pref.mute) playMsgTone(pref.tone); }
         else if (!viewing && !pref.mute) { playMsgTone(pref.tone); buzz(200); }
       }
     });
@@ -1113,6 +1133,12 @@ $('edMsg').addEventListener('change', () => {
 $('edCountry').addEventListener('change', () => {
   if ($('edCountry').value !== (me.country || '')) saveMe({ country: $('edCountry').value }, 'country', 'تم حفظ الدولة');
 });
+try { $('typingSound').checked = typingSoundOn(); } catch {}
+$('typingSound').addEventListener('change', () => {
+  try { localStorage.setItem('marasil-typing-sound', $('typingSound').checked ? 'on' : 'off'); } catch {}
+  if ($('typingSound').checked) keyClick();
+  toast($('typingSound').checked ? 'صوت الكتابة شغال' : 'تم إيقاف صوت الكتابة');
+});
 $('edMute').addEventListener('change', () => saveMe({ mute: $('edMute').checked }, null, $('edMute').checked ? 'تم كتم النغمات' : 'النغمات شغالة'));
 $('setAvail').addEventListener('click', () => (me.busy || me.stText) && saveMe({ busy: false, stText: '' }, 'status', 'حالتك: متوفر'));
 $('setBusy').addEventListener('click', () => (!me.busy || me.stText) && saveMe({ busy: true, stText: '' }, 'status', 'حالتك: مشغول'));
@@ -1232,7 +1258,7 @@ async function openChat(peer){
     .onSnapshot({ includeMetadataChanges: true }, s => {
       msgs = s.docs.map(d => ({ id: d.id, pending: d.metadata.hasPendingWrites, ...d.data() })).reverse();
       if (!firstMsgsSnap) {
-        const fresh = s.docChanges().filter(c => c.type === 'added' && c.doc.data().from !== uid);
+        const fresh = s.docChanges().filter(c => c.type === 'added' && c.doc.data().from !== uid && !arrivedWhileAway(c.doc.data().ts));
         const nw = fresh.find(c => c.doc.data().kind !== 'ping');
         if (!isBlocked(peer) && nw) { const p = notifPref(nw.doc.data().broadcast ? 'broadcast' : 'friends'); if (!p.mute) { playMsgTone(p.tone); buzz(120); } }
       }
@@ -1362,7 +1388,8 @@ async function sendMsg(data, expectedChat = chatId){
   if(data.kind==='voice'){delete messageData.audio;b.set(fs.doc('chats/'+id+'/voiceClips/'+message.id),{from:uid,audio:data.audio,expiresAt});}
   b.set(message,messageData);
   b.update(fs.doc('chats/' + id), { lastMsg: data.kind === 'ping' ? 'PING!!!' : data.kind === 'voice' ? 'رسالة صوتية' : data.kind === 'sticker' ? 'فيس بلاك بيري' : (data.text || '').slice(0, 80), lastTs: ts, lastFrom: uid, lastKind: data.kind || 'text', ['read.' + uid]: ts, ['typing.' + uid]: 0 });
-  try { await b.commit(); notifyPush(id); if (data.kind === 'ping') nudgeEffect(); else play('sent'); return true; }
+  if (data.kind !== 'ping') play('sent');
+  try { await b.commit(); notifyPush(id); if (data.kind === 'ping') nudgeEffect(); return true; }
   catch (e) { console.error(e); toast('ما وصلت الرسالة، تأكد من الاتصال'); return false; }
 }
 let draftSticker = null;
@@ -1559,6 +1586,7 @@ function insertFace(f){
   if(partsText(editorParts()).length+f.length>2000)return;insertEditorNode(document.createTextNode(f));toggleFaces(false);
 }
 document.addEventListener('selectionchange',rememberEditorRange);
+$('msgInput').addEventListener('input', keyClick);
 $('msgInput').addEventListener('beforeinput',e=>{
   if(e.inputType!=='deleteContentBackward')return;
   const selection=window.getSelection();if(!selection?.rangeCount)return;const range=selection.getRangeAt(0);if(!range.collapsed)return;
@@ -1749,7 +1777,7 @@ async function openGroup(gid){
     .onSnapshot({ includeMetadataChanges: true }, s => {
       msgs = s.docs.map(d => ({ id: d.id, pending: d.metadata.hasPendingWrites, ...d.data() })).reverse();
       if (!firstMsgsSnap) {
-        const fresh = s.docChanges().filter(c => c.type === 'added' && c.doc.data().from !== uid && !isBlocked(c.doc.data().from));
+        const fresh = s.docChanges().filter(c => c.type === 'added' && c.doc.data().from !== uid && !isBlocked(c.doc.data().from) && !arrivedWhileAway(c.doc.data().ts));
         if (fresh.some(c => c.doc.data().kind !== 'ping')) { const p = notifPref('groups'); if (!p.mute) { playMsgTone(p.tone); buzz(120); } }
       }
       firstMsgsSnap = false;
