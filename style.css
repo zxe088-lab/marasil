@@ -159,6 +159,18 @@ form.composer input:not(:placeholder-shown){font-style:normal}
 .tn-label{font-weight:600}
 .tn-state{font-size:12px;color:var(--muted)}
 .tn-btns{display:flex;gap:6px}
+#s-loading{justify-content:center;align-items:center;min-height:70vh;gap:22px}
+.splash-logo{width:96px;height:96px;border-radius:22px;box-shadow:0 6px 18px rgba(0,0,0,.25);animation:splashIn .5s ease-out both}
+.splash-dots{display:flex;gap:7px}
+.splash-dots i{width:8px;height:8px;border-radius:50%;background:#008cd3;opacity:.3;animation:splashDot 1.2s infinite ease-in-out}
+.splash-dots i:nth-child(2){animation-delay:.15s}.splash-dots i:nth-child(3){animation-delay:.3s}
+@keyframes splashIn{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:none}}
+@keyframes splashDot{0%,80%,100%{opacity:.3;transform:none}40%{opacity:1;transform:translateY(-4px)}}
+@media (prefers-reduced-motion:reduce){.splash-logo,.splash-dots i{animation:none;opacity:1}}
+#msgList{contain:content;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.notifcat{display:flex;flex-direction:column;gap:8px;padding:10px 0;border-top:1px solid #e3e6e8}
+.notifcat .line{display:flex;gap:8px;align-items:center}
+.notif-tone{flex:1}
 .btn.sm{padding:6px 10px;font-size:13px}
 .agree{justify-content:center;font-weight:500;font-size:14px;line-height:1.6;flex-wrap:wrap}
 .agree a,.links a{color:var(--blue2)}

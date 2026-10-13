@@ -1,0 +1,6 @@
+{
+  "name": "bpb-old-push",
+  "private": true,
+  "description": "BPB OLD: sends iPhone notifications for new messages (Vercel)",
+  "engines": { "node": ">=20" }
+}

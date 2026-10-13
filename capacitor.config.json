@@ -5,6 +5,9 @@
   "plugins": {
     "Keyboard": {
       "resize": "native"
+    },
+    "PushNotifications": {
+      "presentationOptions": []
     }
   },
   "ios": {

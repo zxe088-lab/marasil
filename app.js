@@ -178,7 +178,7 @@ function synthWav(notes){
   return 'data:audio/wav;base64,' + btoa(bin);
 }
 /* نغمات خاصة: 1) ملف يختاره الشخص من جواله (محفوظ في جهازه)  2) ملف في مجلد sounds على السيرفر  3) النغمة الافتراضية */
-const TONE_NAMES = { incoming: 'رسالة واردة (وتُستخدم للوكزة)', sent: 'إرسال رسالة', contact: 'تحديثات الأصحاب' };
+const TONE_NAMES = { sent: 'إرسال رسالة', contact: 'تحديثات الأصحاب' };
 // تشغيل ملفات النغمات عبر عنصر audio، مع احترام قيود التشغيل في النظام.
 const toneEls = {};      // name -> Audio
 const toneOrigin = {};   // 'device' | 'site'
@@ -265,6 +265,49 @@ function renderTonePicker(){
     const btns = el('span', 'tn-btns'); btns.append(pick, test, reset);
     const info = el('span', 'tn-info'); info.append(lab, st);
     row.append(info, btns, inp); box.append(row);
+  });
+}
+// إشعارات الرسائل: لكل نوع (أصدقاء / مجموعات / برودكاست) نغمة + كتم + إشعار خارج التطبيق
+// النغمات موجودة داخل التطبيق نفسه عشان آيفون يقدر يشغّلها في الإشعار وهو مقفل
+const MSG_TONES = { bbm: 'BBM الأصلية', classic: 'كلاسيك', chime: 'رنّة', bell: 'جرس', pop: 'فقاعة', alert: 'تنبيه' };
+const NOTIF_CATS = { friends: 'رسائل الأصدقاء', groups: 'رسائل المجموعات', broadcast: 'رسائل البرودكاست' };
+const NOTIF_DEFAULT = { tone: 'bbm', mute: false, push: true };
+const notifPref = cat => ({ ...NOTIF_DEFAULT, ...(me?.notif?.[cat] || {}) });
+const chatCat = c => c?.isGroup ? 'groups' : c?.lastKind === 'broadcast' ? 'broadcast' : 'friends';
+const toneFile = t => (t === 'bbm' || !MSG_TONES[t]) ? 'sounds/bbm.mp3' : 'sounds/' + t + '.wav';
+const msgToneEls = {};
+Object.keys(MSG_TONES).forEach(t => { const a = new Audio(toneFile(t)); a.preload = 'auto'; msgToneEls[t] = a; });
+document.addEventListener('pointerdown', () => {
+  Object.values(msgToneEls).forEach(a => { a.muted = true; a.play().then(() => { if (!a._want) { a.pause(); try { a.currentTime = 0; } catch {} } a.muted = false; }).catch(() => { a.muted = false; }); });
+}, { once: true, capture: true });
+function playMsgTone(t, force){
+  if (me?.mute && !force) return;
+  const a = msgToneEls[MSG_TONES[t] ? t : 'bbm'];
+  a._want = true; a.muted = false; try { a.currentTime = 0; } catch {}
+  a.play()?.catch(() => SOUNDS.incoming?.());
+}
+function renderNotifSettings(){
+  const box = $('notifList'); if (!box) return;
+  box.replaceChildren();
+  Object.entries(NOTIF_CATS).forEach(([cat, label]) => {
+    const p = notifPref(cat), row = el('div', 'notifcat');
+    const save = (fields, msg) => { const n = { ...(me.notif || {}) }; n[cat] = { ...notifPref(cat), ...fields }; saveMe({ notif: n }, null, msg); };
+    const sel = el('select', 'notif-tone');
+    Object.entries(MSG_TONES).forEach(([k, v]) => { const o = el('option', null, v); o.value = k; sel.append(o); });
+    sel.value = p.tone;
+    sel.onchange = () => { playMsgTone(sel.value, true); save({ tone: sel.value }, 'تم تغيير نغمة ' + label); };
+    const test = el('button', 'btn sm', '▶'); test.type = 'button'; test.title = 'تجربة';
+    test.onclick = () => playMsgTone(sel.value, true);
+    const chk = (text, key, on, onMsg, offMsg) => {
+      const l = el('label', 'check'), i = el('input'); i.type = 'checkbox'; i.checked = on;
+      i.onchange = () => save({ [key]: i.checked }, i.checked ? onMsg : offMsg);
+      l.append(i, document.createTextNode(' ' + text)); return l;
+    };
+    const line = el('div', 'line'); line.append(sel, test);
+    row.append(el('div', 'tn-label', label), line,
+      chk('كتم (بدون صوت ولا اهتزاز)', 'mute', p.mute, 'تم كتم ' + label, 'رجع صوت ' + label),
+      chk('إشعار على الجوال وأنا خارج التطبيق', 'push', p.push, 'إشعارات ' + label + ' شغالة', 'تم إيقاف إشعارات ' + label));
+    box.append(row);
   });
 }
 const buzz = pattern => {
@@ -514,7 +557,7 @@ function start(id){
     const had = !!me; me = s.exists ? s.data() : null;
     if (!me) { show('s-setup', false); watchMyJoin(); return; }
     if (!had) {
-      show('s-home', false); listen(); heartbeat();
+      show('s-home', false); listen(); heartbeat(); setupPush();
       // ميزة تغيير الرمز لصاحب التطبيق فقط (مسجّل في مجموعة admins)
       $('pinAdminCard').hidden = !isOwner(uid);
       if (isOwner(uid)) watchJoinRequests();
@@ -549,6 +592,40 @@ const INVITE_HASHES = ['2ah47uqytni'];
 function inviteHash(s){let h1=0xdeadbeef,h2=0x41c6ce57;for(let i=0,ch;i<s.length;i++){ch=s.charCodeAt(i);h1=Math.imul(h1^ch,2654435761);h2=Math.imul(h2^ch,1597334677);}h1=Math.imul(h1^(h1>>>16),2246822507);h1^=Math.imul(h2^(h2>>>13),3266489909);h2=Math.imul(h2^(h2>>>16),2246822507);h2^=Math.imul(h1^(h1>>>13),3266489909);return (4294967296*(2097151&h2)+(h1>>>0)).toString(36);}
 const inviteOk = code => INVITE_HASHES.includes(inviteHash('bpb-invite:' + code));
 
+// إشعارات الآيفون وأنت خارج التطبيق: نحفظ رمز الجهاز في ملفك، والسيرفر يرسل التنبيه
+const Push = IS_NATIVE ? window.Capacitor?.Plugins?.PushNotifications : null;
+// بعد كل رسالة نطلب من سيرفر الإشعارات (Vercel المجاني) ينبّه الطرف الثاني
+const PUSH_URL = window.PUSH_URL || 'https://51-254-218-100.sslip.io/api/notify';
+function notifyPush(chatId){
+  if (!PUSH_URL || !chatId) return;
+  auth.currentUser?.getIdToken().then(t => fetch(PUSH_URL, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t },
+    body: JSON.stringify({ chatId }), keepalive: true
+  })).catch(() => {});
+}
+async function setupPush(){
+  if (!Push) return;
+  try {
+    Push.addListener('registration', t => {
+      if (t?.value && me?.apns !== t.value) fs.doc('users/' + uid).update({ apns: t.value }).catch(console.error);
+    });
+    Push.addListener('registrationError', e => console.error('push', e));
+    Push.addListener('pushNotificationActionPerformed', a => {
+      const cid = a?.notification?.data?.chatId; if (!cid) return;
+      const go = () => {
+        const c = chats[cid]; if (!c) return false;
+        if (c.isGroup) openGroup(cid); else { const p = (c.members || []).find(m => m !== uid); if (p) openChat(p); }
+        return true;
+      };
+      if (!go()) { let n = 0; const t = setInterval(() => { if (go() || ++n > 20) clearInterval(t); }, 500); }
+    });
+    let p = await Push.checkPermissions();
+    if (p.receive === 'prompt' || p.receive === 'prompt-with-rationale') p = await Push.requestPermissions();
+    if (p.receive === 'granted') await Push.register();
+    const clear = () => { if (document.visibilityState === 'visible') Push.removeAllDeliveredNotifications?.().catch(() => {}); };
+    clear(); document.addEventListener('visibilitychange', clear);
+  } catch (e) { console.error('push', e); }
+}
 function heartbeat(){
   const beat = () => { if (document.visibilityState === 'visible') fs.doc('users/' + uid).update({ lastSeen: Date.now() }).catch(() => {}); };
   beat(); setInterval(beat, 4 * 60 * 1000);
@@ -564,7 +641,7 @@ function watchUser(id){
     if (prev && users[id] && prev.updatedAt !== users[id].updatedAt && contacts[id]) play('contact');
     renderHomeSoon();
     if (profileId === id && !$('s-profile').hidden) renderProfile();
-    if (chatPeer === id) { renderChatHead(); renderMsgs(); }
+    if (chatPeer === id) { renderChatHead(); renderMsgsSoon(); }
   });
 }
 
@@ -579,7 +656,7 @@ function listen(){
   fs.collection('users/' + uid + '/blocked').onSnapshot(s => {
     blocked = {}; s.docs.forEach(d => blocked[d.id] = true);
     renderHomeSoon();
-    if (chatPeer) { renderChatHead(); renderMsgs(); }
+    if (chatPeer) { renderChatHead(); renderMsgsSoon(); }
     if (profileId && !$('s-profile').hidden) renderProfile();
   });
   fs.collection('users/' + uid + '/contacts').onSnapshot(s => {
@@ -594,8 +671,9 @@ function listen(){
       if (!firstChatsSnap && c.type !== 'removed' && d.lastFrom && d.lastFrom !== uid && !isBlocked(d.lastFrom) && d.lastTs > (chats[c.doc.id]?.lastTs || 0)) {
         const viewing = c.doc.id === chatId && document.visibilityState === 'visible';
         ledFlash();
-        if (d.lastKind === 'ping') { nudgeEffect(); play('ping'); }
-        else if (!viewing) { play('incoming'); buzz(200); }
+        const pref = notifPref(chatCat(d));
+        if (d.lastKind === 'ping') { nudgeEffect(); if (!pref.mute) playMsgTone(pref.tone); }
+        else if (!viewing && !pref.mute) { playMsgTone(pref.tone); buzz(200); }
       }
     });
     chats = {}; s.docs.forEach(d => chats[d.id] = d.data());
@@ -1000,7 +1078,7 @@ function renderProfile(){
     $('setAvail').setAttribute('aria-pressed', !me.busy && !me.stText); $('setBusy').setAttribute('aria-pressed', !!me.busy && !me.stText);
     renderCustomStatuses();
     $('photoDel').hidden = !me.photo;
-    renderTonePicker();
+    renderTonePicker(); renderNotifSettings();
     renderAccount();
   } else {
     fillCatSelect($('pfCat'), contacts[id]?.cat);
@@ -1148,17 +1226,18 @@ async function openChat(peer){
   chatId = id; chatPeer = peer; chatGroup = null; lastChat = { id: peer, group: false }; msgs = []; curChat = null; firstMsgsSnap = true;
   watchUser(peer); renderChatHead();
   $('msgList').replaceChildren(el('div', 'empty', 'جاري التحميل…'));
-  unsubChat = fs.doc('chats/' + id).onSnapshot(s => { curChat = s.data() || {}; renderMsgs(); renderTyping(); });
+  unsubChat = fs.doc('chats/' + id).onSnapshot(s => { const k = msgsKey(curChat); curChat = s.data() || {}; if (msgsKey(curChat) !== k) renderMsgsSoon(); renderTyping(); });
   cleanExpiredMessages(id);
   unsubMsgs = fs.collection('chats/' + id + '/messages').where('ts','>',Date.now()-MESSAGE_LIFETIME).orderBy('ts', 'desc').limit(30)
     .onSnapshot({ includeMetadataChanges: true }, s => {
       msgs = s.docs.map(d => ({ id: d.id, pending: d.metadata.hasPendingWrites, ...d.data() })).reverse();
       if (!firstMsgsSnap) {
         const fresh = s.docChanges().filter(c => c.type === 'added' && c.doc.data().from !== uid);
-        if (!isBlocked(peer) && fresh.some(c => c.doc.data().kind !== 'ping')) { play('incoming'); buzz(120); }
+        const nw = fresh.find(c => c.doc.data().kind !== 'ping');
+        if (!isBlocked(peer) && nw) { const p = notifPref(nw.doc.data().broadcast ? 'broadcast' : 'friends'); if (!p.mute) { playMsgTone(p.tone); buzz(120); } }
       }
       firstMsgsSnap = false;
-      renderMsgs(true);
+      renderMsgsSoon(true);
     });
 }
 function closeChat(){ chatGroup = null; cancelVoice(); closeOncePhoto(); clearDraftSticker(); toggleFaces(false); unsubMsgs?.(); unsubChat?.(); unsubMsgs = unsubChat = null; chatId = chatPeer = null; }
@@ -1187,6 +1266,14 @@ function renderChatHead(){
 }
 $('chInfo').addEventListener('click', () => chatGroup ? openGroupEditor(chatGroup) : chatPeer && openProfile(chatPeer));
 
+// نجمع طلبات الرسم في إطار واحد، ونعيد رسم الرسائل فقط إذا تغيّر شي يأثر عليها
+let msgsRaf = 0, msgsFrom = false;
+function renderMsgsSoon(fromMsgs){
+  msgsFrom = msgsFrom || !!fromMsgs;
+  if (msgsRaf) return;
+  msgsRaf = requestAnimationFrame(() => { msgsRaf = 0; const f = msgsFrom; msgsFrom = false; renderMsgs(f); });
+}
+const msgsKey = c => JSON.stringify([(c || {}).read || {}, (c || {}).members || [], (c || {}).name || '']);
 function renderMsgs(fromMsgs){
   if (!chatPeer && !chatGroup) return;
   const list = $('msgList'), atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 80;
@@ -1261,10 +1348,10 @@ function renderTyping(){
     $('typing').textContent = who.length ? who.slice(0, 2).map(nameOf).join('، ') + (who.length > 1 ? ' يكتبون…' : ' يكتب…') : '';
     return;
   }
-  const t = typing[chatPeer] || 0;
-  $('typing').textContent = chatPeer && Date.now() - t < 5000 ? nameOf(chatPeer) + ' يكتب…' : '';
+  const t = typing[chatPeer] || 0, txt = chatPeer && Date.now() - t < 5000 ? nameOf(chatPeer) + ' يكتب…' : '';
+  if ($('typing').textContent !== txt) $('typing').textContent = txt;
 }
-setInterval(renderTyping, 1500);
+setInterval(() => { if (!document.hidden && chatId) renderTyping(); }, 1500);
 
 async function sendMsg(data, expectedChat = chatId){
   if (!chatId || chatId !== expectedChat || $('composer').hidden) return false;
@@ -1275,7 +1362,7 @@ async function sendMsg(data, expectedChat = chatId){
   if(data.kind==='voice'){delete messageData.audio;b.set(fs.doc('chats/'+id+'/voiceClips/'+message.id),{from:uid,audio:data.audio,expiresAt});}
   b.set(message,messageData);
   b.update(fs.doc('chats/' + id), { lastMsg: data.kind === 'ping' ? 'PING!!!' : data.kind === 'voice' ? 'رسالة صوتية' : data.kind === 'sticker' ? 'فيس بلاك بيري' : (data.text || '').slice(0, 80), lastTs: ts, lastFrom: uid, lastKind: data.kind || 'text', ['read.' + uid]: ts, ['typing.' + uid]: 0 });
-  try { await b.commit(); if (data.kind === 'ping') nudgeEffect(); else play('sent'); return true; }
+  try { await b.commit(); notifyPush(id); if (data.kind === 'ping') nudgeEffect(); else play('sent'); return true; }
   catch (e) { console.error(e); toast('ما وصلت الرسالة، تأكد من الاتصال'); return false; }
 }
 let draftSticker = null;
@@ -1363,7 +1450,7 @@ async function sendOncePhoto(file){
     batch.set(message,{from:uid,ts,kind:'once-photo',opened:false,expiresAt});
     batch.set(fs.doc('chats/'+id+'/oncePhotos/'+message.id),{from:uid,to:recipient,image:payload,expiresAt});
     batch.update(fs.doc('chats/'+id),{lastMsg:'صورة لمرة واحدة',lastTs:ts,lastFrom:uid,lastKind:'once-photo',['read.'+uid]:ts});
-    await batch.commit(); play('sent');
+    await batch.commit(); notifyPush(id); play('sent');
   } catch(error){console.error(error);toast('تعذّر إرسال الصورة، تأكد من الاتصال والصلاحيات');}
   finally {if(objectUrl)URL.revokeObjectURL(objectUrl);photoBusy=false;}
 }
@@ -1379,7 +1466,7 @@ $('cameraBtn').onclick=()=>{if(chatId&&!$('composer').hidden)$('chatCameraInput'
 $('chatCameraInput').onchange=()=>{const file=$('chatCameraInput').files[0];$('chatCameraInput').value='';if(file)sendOncePhoto(file);};
 $('closeOnceViewer').onclick=closeOncePhoto;
 document.addEventListener('visibilitychange',()=>{if(document.hidden){cancelVoice();closeOncePhoto();updateComposer();}});
-setInterval(()=>{if(!document.hidden){if(chatId)renderMsgs();renderChats();}},60000);
+setInterval(()=>{if(!document.hidden){if(chatId)renderMsgsSoon();renderChats();}},60000);
 function editorParts(){
   const parts=[];
   const text=value=>{value=value.replace(/\u200b/g,'');if(!value)return;const last=parts[parts.length-1];if(last&&typeof last.text==='string')last.text+=value;else parts.push({text:value});};
@@ -1544,7 +1631,7 @@ $('bcForm').addEventListener('submit', async e => {
       const b = fs.batch();
       b.set(fs.collection('chats/' + id + '/messages').doc(), { from: uid, ts, kind: 'text', text, broadcast: true, expiresAt: firebase.firestore.Timestamp.fromMillis(ts + MESSAGE_LIFETIME) });
       b.update(fs.doc('chats/' + id), { lastMsg: text.slice(0, 80), lastTs: ts, lastFrom: uid, lastKind: 'broadcast', ['read.' + uid]: ts });
-      await b.commit(); ok++;
+      await b.commit(); ok++; notifyPush(id);
     } catch (err) { console.error(err); }
   }
   bcBusy = false; $('bcSend').disabled = false; $('bcSend').textContent = '📢 إرسال';
@@ -1651,10 +1738,11 @@ async function openGroup(gid){
   $('msgList').replaceChildren(el('div', 'empty', 'جاري التحميل…'));
   unsubChat = fs.doc('chats/' + gid).onSnapshot(s => {
     if (!s.exists) { toast('المجموعة انحذفت'); lastChat = null; show('s-home'); return; }
-    curChat = s.data() || {};
+    const k = msgsKey(curChat); curChat = s.data() || {};
     if (!(curChat.members || []).includes(uid)) { toast('ما عدت عضو في هذي المجموعة'); lastChat = null; show('s-home'); return; }
     (curChat.members || []).forEach(m => m !== uid && watchUser(m));
-    renderChatHead(); renderMsgs(); renderTyping();
+    if (msgsKey(curChat) !== k) { renderChatHead(); renderMsgsSoon(); }
+    renderTyping();
   }, () => { toast('ما قدرنا نفتح المجموعة'); lastChat = null; show('s-home'); });
   cleanExpiredMessages(gid);
   unsubMsgs = fs.collection('chats/' + gid + '/messages').where('ts','>',Date.now()-MESSAGE_LIFETIME).orderBy('ts', 'desc').limit(30)
@@ -1662,10 +1750,10 @@ async function openGroup(gid){
       msgs = s.docs.map(d => ({ id: d.id, pending: d.metadata.hasPendingWrites, ...d.data() })).reverse();
       if (!firstMsgsSnap) {
         const fresh = s.docChanges().filter(c => c.type === 'added' && c.doc.data().from !== uid && !isBlocked(c.doc.data().from));
-        if (fresh.some(c => c.doc.data().kind !== 'ping')) { play('incoming'); buzz(120); }
+        if (fresh.some(c => c.doc.data().kind !== 'ping')) { const p = notifPref('groups'); if (!p.mute) { playMsgTone(p.tone); buzz(120); } }
       }
       firstMsgsSnap = false;
-      renderMsgs(true);
+      renderMsgsSoon(true);
     }, e => console.error(e));
 }
 
