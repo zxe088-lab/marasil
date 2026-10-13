@@ -594,6 +594,15 @@ const inviteOk = code => INVITE_HASHES.includes(inviteHash('bpb-invite:' + code)
 
 // إشعارات الآيفون وأنت خارج التطبيق: نحفظ رمز الجهاز في ملفك، والسيرفر يرسل التنبيه
 const Push = IS_NATIVE ? window.Capacitor?.Plugins?.PushNotifications : null;
+// بعد كل رسالة نطلب من سيرفر الإشعارات (Vercel المجاني) ينبّه الطرف الثاني
+const PUSH_URL = window.PUSH_URL || 'https://bpb-old-push.vercel.app/api/notify';
+function notifyPush(chatId){
+  if (!PUSH_URL || !chatId) return;
+  auth.currentUser?.getIdToken().then(t => fetch(PUSH_URL, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t },
+    body: JSON.stringify({ chatId }), keepalive: true
+  })).catch(() => {});
+}
 async function setupPush(){
   if (!Push) return;
   try {
@@ -1336,7 +1345,7 @@ async function sendMsg(data, expectedChat = chatId){
   if(data.kind==='voice'){delete messageData.audio;b.set(fs.doc('chats/'+id+'/voiceClips/'+message.id),{from:uid,audio:data.audio,expiresAt});}
   b.set(message,messageData);
   b.update(fs.doc('chats/' + id), { lastMsg: data.kind === 'ping' ? 'PING!!!' : data.kind === 'voice' ? 'رسالة صوتية' : data.kind === 'sticker' ? 'فيس بلاك بيري' : (data.text || '').slice(0, 80), lastTs: ts, lastFrom: uid, lastKind: data.kind || 'text', ['read.' + uid]: ts, ['typing.' + uid]: 0 });
-  try { await b.commit(); if (data.kind === 'ping') nudgeEffect(); else play('sent'); return true; }
+  try { await b.commit(); notifyPush(id); if (data.kind === 'ping') nudgeEffect(); else play('sent'); return true; }
   catch (e) { console.error(e); toast('ما وصلت الرسالة، تأكد من الاتصال'); return false; }
 }
 let draftSticker = null;
@@ -1424,7 +1433,7 @@ async function sendOncePhoto(file){
     batch.set(message,{from:uid,ts,kind:'once-photo',opened:false,expiresAt});
     batch.set(fs.doc('chats/'+id+'/oncePhotos/'+message.id),{from:uid,to:recipient,image:payload,expiresAt});
     batch.update(fs.doc('chats/'+id),{lastMsg:'صورة لمرة واحدة',lastTs:ts,lastFrom:uid,lastKind:'once-photo',['read.'+uid]:ts});
-    await batch.commit(); play('sent');
+    await batch.commit(); notifyPush(id); play('sent');
   } catch(error){console.error(error);toast('تعذّر إرسال الصورة، تأكد من الاتصال والصلاحيات');}
   finally {if(objectUrl)URL.revokeObjectURL(objectUrl);photoBusy=false;}
 }
@@ -1605,7 +1614,7 @@ $('bcForm').addEventListener('submit', async e => {
       const b = fs.batch();
       b.set(fs.collection('chats/' + id + '/messages').doc(), { from: uid, ts, kind: 'text', text, broadcast: true, expiresAt: firebase.firestore.Timestamp.fromMillis(ts + MESSAGE_LIFETIME) });
       b.update(fs.doc('chats/' + id), { lastMsg: text.slice(0, 80), lastTs: ts, lastFrom: uid, lastKind: 'broadcast', ['read.' + uid]: ts });
-      await b.commit(); ok++;
+      await b.commit(); ok++; notifyPush(id);
     } catch (err) { console.error(err); }
   }
   bcBusy = false; $('bcSend').disabled = false; $('bcSend').textContent = '📢 إرسال';
