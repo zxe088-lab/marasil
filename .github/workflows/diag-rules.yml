@@ -1,0 +1,24 @@
+name: diag-rules
+on:
+  push:
+    branches: [diag-rules]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test self sign-up against live rules
+        run: |
+          KEY=AIzaSyDn_609hmjmbSD8hFcWc8-PcEDhI61D4z8; P=bbm-old-1e477
+          B="https://firestore.googleapis.com/v1/projects/$P/databases/(default)/documents"
+          R=$(curl -s -H "Referer: https://zxe088-lab.github.io/" -H 'Content-Type: application/json' -d '{"returnSecureToken":true}' "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$KEY")
+          T=$(echo "$R" | jq -r .idToken); U=$(echo "$R" | jq -r .localId)
+          echo "::notice::signUp: $( [ "$T" != null ] && echo ok || echo "$R" | jq -c .error)"
+          NOW=$(date +%s000)
+          c1=$(curl -s -o p.json -w '%{http_code}' -X PATCH -H "Authorization: Bearer $T" -H 'Content-Type: application/json' "$B/pins/ZZRULE01?currentDocument.exists=false" -d "{\"fields\":{\"uid\":{\"stringValue\":\"$U\"}}}")
+          echo "::notice::create pins/ZZRULE01 -> $c1 $(jq -c .error.message p.json 2>/dev/null)"
+          c2=$(curl -s -o u.json -w '%{http_code}' -X PATCH -H "Authorization: Bearer $T" -H 'Content-Type: application/json' "$B/users/$U?currentDocument.exists=false" -d "{\"fields\":{\"name\":{\"stringValue\":\"rules-test\"},\"pin\":{\"stringValue\":\"ZZRULE01\"},\"msg\":{\"stringValue\":\"\"},\"busy\":{\"booleanValue\":false},\"photo\":{\"stringValue\":\"\"},\"country\":{\"stringValue\":\"\"},\"tz\":{\"stringValue\":\"UTC\"},\"cats\":{\"arrayValue\":{\"values\":[{\"stringValue\":\"جهات الاتصال\"}]}},\"mute\":{\"booleanValue\":false},\"lastSeen\":{\"integerValue\":\"$NOW\"},\"updatedAt\":{\"integerValue\":\"$NOW\"},\"change\":{\"stringValue\":\"join\"}}}")
+          echo "::notice::create users/{self} -> $c2 $(jq -c .error.message u.json 2>/dev/null)"
+          d2=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE -H "Authorization: Bearer $T" "$B/users/$U")
+          d1=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE -H "Authorization: Bearer $T" "$B/pins/ZZRULE01")
+          d0=$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d "{\"idToken\":\"$T\"}" "https://identitytoolkit.googleapis.com/v1/accounts:delete?key=$KEY")
+          echo "::notice::cleanup users=$d2 pins=$d1 account=$d0"
