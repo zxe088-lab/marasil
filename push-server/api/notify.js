@@ -2,6 +2,7 @@
 // والسيرفر يتأكد إن المرسل عضو في المحادثة ثم يرسل تنبيه Apple للطرف الثاني.
 const crypto = require('crypto');
 const http2 = require('http2');
+const fs = require('fs');
 
 const PROJECT = 'bbm-old-1e477';
 const BUNDLE_ID = 'com.zxe088.bpmold';
@@ -37,7 +38,7 @@ function apnsJwt(){
   const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
   const head = b64({ alg: 'ES256', kid: process.env.APNS_KEY_ID.trim() });
   const body = b64({ iss: process.env.APPLE_TEAM_ID.trim(), iat: now });
-  const key = process.env.APNS_KEY.replace(/\\n/g, '\n');
+  const key = process.env.APNS_KEY ? process.env.APNS_KEY.replace(/\\n/g, '\n') : fs.readFileSync(process.env.APNS_KEY_FILE, 'utf8');
   const sig = crypto.sign('sha256', Buffer.from(head + '.' + body), { key, dsaEncoding: 'ieee-p1363' }).toString('base64url');
   jwtCache = { token: `${head}.${body}.${sig}`, at: now };
   return jwtCache.token;
@@ -95,7 +96,7 @@ module.exports = async (req, res) => {
     const p = { push: true, ...((u.notif || {})[cat] || {}) };
     return p.push !== false;
   });
-  if (!targets.length) return res.status(200).json({ sent: 0 });
+  if (!targets.length) { console.log(new Date().toISOString(), 'push', chatId, 'no target with notifications on (apns token missing?)'); return res.status(200).json({ sent: 0 }); }
 
   const client = http2.connect('https://api.push.apple.com');
   client.on('error', () => {});
@@ -107,6 +108,7 @@ module.exports = async (req, res) => {
       if (!u.mute && !p.mute) aps.sound = TONES.includes(p.tone) ? p.tone + '.wav' : 'bbm.caf';
       const r = await sendApns(client, u.apns, { aps, chatId });
       if (r.status === 200) sent++; else console.error('APNs', r.status, r.data);
+      console.log(new Date().toISOString(), 'push', chatId, cat, '->', r.status, r.data || 'ok');
     }));
   } finally { client.close(); }
   res.status(200).json({ sent });

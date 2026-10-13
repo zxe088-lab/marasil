@@ -595,7 +595,7 @@ const inviteOk = code => INVITE_HASHES.includes(inviteHash('bpb-invite:' + code)
 // إشعارات الآيفون وأنت خارج التطبيق: نحفظ رمز الجهاز في ملفك، والسيرفر يرسل التنبيه
 const Push = IS_NATIVE ? window.Capacitor?.Plugins?.PushNotifications : null;
 // بعد كل رسالة نطلب من سيرفر الإشعارات (Vercel المجاني) ينبّه الطرف الثاني
-const PUSH_URL = window.PUSH_URL || 'https://bpb-old-push.vercel.app/api/notify';
+const PUSH_URL = window.PUSH_URL || 'https://51-254-218-100.sslip.io/api/notify';
 function notifyPush(chatId){
   if (!PUSH_URL || !chatId) return;
   auth.currentUser?.getIdToken().then(t => fetch(PUSH_URL, {
