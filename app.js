@@ -178,7 +178,7 @@ function synthWav(notes){
   return 'data:audio/wav;base64,' + btoa(bin);
 }
 /* نغمات خاصة: 1) ملف يختاره الشخص من جواله (محفوظ في جهازه)  2) ملف في مجلد sounds على السيرفر  3) النغمة الافتراضية */
-const TONE_NAMES = { incoming: 'رسالة واردة', ping: 'الوكزة PING', sent: 'إرسال رسالة', contact: 'تحديثات الأصحاب' };
+const TONE_NAMES = { incoming: 'رسالة واردة (وتُستخدم للوكزة)', sent: 'إرسال رسالة', contact: 'تحديثات الأصحاب' };
 // تشغيل ملفات النغمات عبر عنصر audio، مع احترام قيود التشغيل في النظام.
 const toneEls = {};      // name -> Audio
 const toneOrigin = {};   // 'device' | 'site'
@@ -224,7 +224,7 @@ function playFile(name){
   if (p) p.catch(() => { a._want = false; SOUNDS[name]?.(); });
   return true;
 }
-const play = name => { if (me?.mute) return; if (playFile(name)) return; SOUNDS[name]?.(); };
+const play = name => { if (me?.mute) return; if (name === 'ping') name = 'incoming'; if (playFile(name)) return; SOUNDS[name]?.(); };
 function toneReady(name){
   return new Promise(res => {
     const a = toneEls[name]; if (!a) return res(false);
@@ -296,10 +296,10 @@ function nudgeEffect(){
 }
 
 /* ---------- التنقل ---------- */
-const SCREENS = ['s-loading','s-error','s-login','s-setup','s-home','s-add','s-menu','s-broadcast','s-group','s-profile','s-chat'];
+const SCREENS = ['s-loading','s-error','s-login','s-email','s-setup','s-home','s-add','s-menu','s-broadcast','s-group','s-profile','s-chat'];
 function show(id, push = true){
   const cur = SCREENS.find(s => !$(s).hidden);
-  if (push && cur && cur !== id && !['s-loading','s-error','s-login','s-setup'].includes(cur)) stack.push(cur);
+  if (push && cur && cur !== id && !['s-loading','s-error','s-login','s-email','s-setup'].includes(cur)) stack.push(cur);
   SCREENS.forEach(s => $(s).hidden = s !== id);
   if (id !== 's-chat') closeChat();
   else if (!push && !chatId && lastChat) { const lc = lastChat; setTimeout(() => lc.group ? openGroup(lc.id) : openChat(lc.id)); }
@@ -383,6 +383,64 @@ async function linkGoogle(){
     authError(e);
   }
 }
+/* ---------- دخول المالك بالإيميل ---------- */
+// الربط: المالك يربط إيميل وكلمة مرور بحسابه الحالي (نفس الـ UID)، وبعدها يدخل فيه من أي جهاز.
+// لازم يكون الدخول بالإيميل (Email/Password) مفعّل في Firebase Authentication ← Sign-in method.
+let emailMode = 'login', emailReturn = 's-login';
+function openEmailScreen(mode, from){
+  emailMode = mode; emailReturn = from || 's-login';
+  const link = mode === 'link';
+  $('emailTitle').textContent = link ? 'ربط إيميل المالك' : 'دخول المالك بالإيميل';
+  $('emailIntro').textContent = link
+    ? 'اختر إيميل وكلمة مرور (8 خانات أو أكثر). بعد الربط تدخل بهم من أي جهاز وتبقى مالك التطبيق بنفس حسابك.'
+    : 'ادخل بالإيميل وكلمة المرور اللي ربطتهم بحساب المالك.';
+  $('emailSubmit').textContent = link ? 'ربط الإيميل' : 'دخول';
+  $('emailPass').autocomplete = link ? 'new-password' : 'current-password';
+  $('emailReset').hidden = link;
+  $('emailPass').value = '';
+  show('s-email');
+}
+function emailAuthError(e){
+  console.error(e);
+  const c = e?.code || '';
+  if (c === 'auth/operation-not-allowed') toast('لازم تفعّل الدخول بالإيميل (Email/Password) داخل Firebase');
+  else if (['auth/invalid-credential', 'auth/wrong-password', 'auth/user-not-found', 'auth/invalid-login-credentials'].includes(c)) toast('الإيميل أو كلمة المرور غير صحيحة');
+  else if (c === 'auth/invalid-email') toast('الإيميل غير صحيح');
+  else if (c === 'auth/weak-password') toast('كلمة المرور ضعيفة، استخدم 8 خانات أو أكثر');
+  else if (c === 'auth/email-already-in-use' || c === 'auth/credential-already-in-use') toast('هذا الإيميل مربوط بحساب ثاني');
+  else if (c === 'auth/provider-already-linked') toast('حسابك مربوط بإيميل من قبل');
+  else if (c === 'auth/requires-recent-login') toast('سجّل خروج ثم ادخل من جديد وجرّب الربط');
+  else if (c === 'auth/too-many-requests') toast('محاولات كثيرة، انتظر شوي وجرّب');
+  else if (c === 'auth/network-request-failed') toast('تأكد من اتصال الإنترنت');
+  else toast('ما قدرنا ننفّذ الطلب، جرّب مرة ثانية');
+}
+$('emailSubmit').addEventListener('click', async () => {
+  const email = $('emailInput').value.trim(), pass = $('emailPass').value;
+  if (!email || !pass) { toast('اكتب الإيميل وكلمة المرور'); return; }
+  if (emailMode === 'link' && pass.length < 8) { toast('كلمة المرور لازم تكون 8 خانات أو أكثر'); return; }
+  $('emailSubmit').disabled = true;
+  try {
+    if (emailMode === 'link') {
+      const u = auth.currentUser; if (!u) return;
+      await u.linkWithCredential(firebase.auth.EmailAuthProvider.credential(email, pass));
+      await u.reload(); $('emailPass').value = ''; renderAccount(); toast('تم ربط الإيميل ✅ تقدر تدخل فيه من أي جهاز'); back();
+    } else {
+      await auth.signInWithEmailAndPassword(email, pass);
+      $('emailPass').value = ''; location.reload();
+    }
+  } catch (e) { emailAuthError(e); }
+  $('emailSubmit').disabled = false;
+});
+$('emailReset').addEventListener('click', async () => {
+  const email = $('emailInput').value.trim();
+  if (!email) { toast('اكتب الإيميل أول'); return; }
+  try { await auth.sendPasswordResetEmail(email); toast('إذا الإيميل مسجّل بيوصلك رابط إعادة تعيين كلمة المرور'); } catch (e) { emailAuthError(e); }
+});
+$('emailCancel').addEventListener('click', () => { $('emailPass').value = ''; if (emailMode === 'link') back(); else show(emailReturn, false); });
+$('emailLoginBtn').addEventListener('click', () => openEmailScreen('login', 's-login'));
+$('setupEmailBtn').addEventListener('click', () => openEmailScreen('login', 's-setup'));
+$('linkEmailBtn').addEventListener('click', () => openEmailScreen('link'));
+
 async function signOutNow(){
   const u = auth.currentUser;
   if (u?.isAnonymous) {
@@ -394,13 +452,16 @@ async function signOutNow(){
 function renderAccount(){
   const u = auth?.currentUser; if (!u) return;
   $('accId').textContent = u.uid;
+  const pw = (u.providerData || []).find(p => p.providerId === 'password');
+  const pwText = pw ? 'مربوط بالإيميل: ' + (pw.email || u.email || '') : '';
+  $('linkEmailBtn').hidden = !isOwner(u.uid) || !!pw;
   if (IS_NATIVE) {
-    $('accState').textContent = 'حسابك محفوظ في هذا الجهاز. إذا حذفت التطبيق بيضيع الحساب.';
-    $('linkGoogleBtn').hidden = true; $('signOutBtn').hidden = true;
+    $('accState').textContent = pwText || 'حسابك محفوظ في هذا الجهاز. إذا حذفت التطبيق بيضيع الحساب.';
+    $('linkGoogleBtn').hidden = true; $('signOutBtn').hidden = !pw;
     return;
   }
   const g = (u.providerData || []).find(p => p.providerId === 'google.com');
-  $('accState').textContent = g ? 'مربوط بقوقل: ' + (g.email || u.email || '') : 'حسابك مو مربوط. لو مسحت بيانات المتصفح أو غيّرت جوالك بيضيع حسابك.';
+  $('accState').textContent = g ? 'مربوط بقوقل: ' + (g.email || u.email || '') : pwText || 'حسابك مو مربوط. لو مسحت بيانات المتصفح أو غيّرت جوالك بيضيع حسابك.';
   $('linkGoogleBtn').hidden = !!g;
 }
 
@@ -533,7 +594,7 @@ function listen(){
       if (!firstChatsSnap && c.type !== 'removed' && d.lastFrom && d.lastFrom !== uid && !isBlocked(d.lastFrom) && d.lastTs > (chats[c.doc.id]?.lastTs || 0)) {
         const viewing = c.doc.id === chatId && document.visibilityState === 'visible';
         ledFlash();
-        if (d.lastKind === 'ping') nudgeEffect();
+        if (d.lastKind === 'ping') { nudgeEffect(); play('ping'); }
         else if (!viewing) { play('incoming'); buzz(200); }
       }
     });
