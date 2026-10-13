@@ -4,6 +4,11 @@ name: BPB OLD - iOS (GitHub Actions)
 
 on:
   workflow_dispatch:        # تشغيل يدوي فقط من تبويب Actions
+    inputs:
+      version:
+        description: "App version (CFBundleShortVersionString)"
+        required: false
+        default: "1.2.0"
 
 jobs:
   ios-release:
@@ -77,7 +82,7 @@ jobs:
       - name: App settings
         run: |
           PLIST=ios/App/App/Info.plist
-          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString 1.2.0" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${{ inputs.version || '1.2.0' }}" "$PLIST"
           /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName $APP_NAME" "$PLIST" \
             || /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string $APP_NAME" "$PLIST"
           /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" "$PLIST" || true
