@@ -46,6 +46,18 @@
     <p>ادخل بحساب قوقل عشان يبقى حسابك ورمز PIN حقك محفوظ، حتى لو غيّرت جوالك.</p>
     <button type="button" class="btn primary" id="googleLoginBtn">الدخول بحساب قوقل</button>
     <button type="button" class="btn" id="anonLoginBtn">الدخول بدون حساب</button>
+    <button type="button" class="btn" id="emailLoginBtn">دخول المالك بالإيميل</button>
+  </section>
+
+  <section id="s-email" class="screen" hidden>
+    <div class="setup-icon"><svg><use href="#i-chats"/></svg></div>
+    <h1 id="emailTitle">دخول المالك بالإيميل</h1>
+    <p class="hint" id="emailIntro"></p>
+    <input id="emailInput" type="email" inputmode="email" maxlength="120" placeholder="الإيميل · Email" autocomplete="email" autocapitalize="off" autocorrect="off" dir="ltr">
+    <input id="emailPass" type="password" maxlength="128" placeholder="كلمة المرور · Password" autocomplete="current-password" dir="ltr">
+    <button type="button" class="btn primary" id="emailSubmit">دخول</button>
+    <button type="button" class="btn" id="emailReset">نسيت كلمة المرور</button>
+    <button type="button" class="btn" id="emailCancel">رجوع</button>
   </section>
 
   <section id="s-setup" class="screen" hidden>
@@ -58,6 +70,7 @@
     <input id="setupInvite" maxlength="12" placeholder="Invite code · رمز الدعوة" autocomplete="off" autocapitalize="characters" dir="ltr">
     <label class="check agree"><input type="checkbox" id="agreeTerms"> I agree · أوافق على <a href="https://zxe088-lab.github.io/marasil/terms.html" target="_blank" rel="noopener">شروط الاستخدام</a> و<a href="https://zxe088-lab.github.io/marasil/privacy.html" target="_blank" rel="noopener">سياسة الخصوصية</a></label>
     <button type="button" class="btn primary" id="setupBtn">إرسال طلب الانضمام · Join</button>
+    <button type="button" class="btn" id="setupEmailBtn">دخول المالك بالإيميل · Owner sign-in</button>
     </div>
     <div id="setupWait" class="setup-wait" hidden><p id="setupWaitText"></p><button type="button" class="btn" id="setupRetry" hidden>إرسال طلب جديد</button></div>
   </section>
@@ -210,6 +223,7 @@
           <div class="hint" id="accState"></div>
           <div class="kv spread acc-id"><span class="hint">معرّف الحساب: <bdi id="accId"></bdi></span><button type="button" class="btn sm" id="accIdCopy">نسخ</button></div>
           <button type="button" class="btn primary" id="linkGoogleBtn">ربط حسابي بقوقل</button>
+          <button type="button" class="btn primary" id="linkEmailBtn" hidden>ربط إيميل المالك</button>
           <button type="button" class="btn" id="photoDel">إزالة صورة العرض</button>
           <button type="button" class="btn danger" id="signOutBtn">تسجيل خروج</button>
           <button type="button" class="btn danger" id="deleteAccBtn">حذف الحساب</button>
