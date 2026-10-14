@@ -148,7 +148,7 @@ function keyClick(){
     const d = keyClickBuf.getChannelData(0); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 4);
   }
   const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
-  s.buffer = keyClickBuf; f.type = 'bandpass'; f.frequency.value = 2000 + Math.random() * 700; f.Q.value = 1.1; g.gain.value = 0.4;
+  s.buffer = keyClickBuf; f.type = 'bandpass'; f.frequency.value = 1500 + Math.random() * 400; f.Q.value = 0.8; g.gain.value = 0.09;
   s.connect(f).connect(g).connect(ctx.destination); s.start();
 }
 function tone(notes){
