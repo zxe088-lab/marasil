@@ -1,0 +1,11 @@
+[
+  { "id": "bbm",      "name": "BBM الأصلية",   "file": "bbm.mp3" },
+  { "id": "waqz",     "name": "وكزة",          "file": "waqz.mp3" },
+  { "id": "t444",     "name": "نغمة 444",      "file": "444.mp3" },
+  { "id": "t333",     "name": "نغمة 333",      "file": "333.mp3" },
+  { "id": "classic",  "name": "كلاسيك",        "file": "classic.wav" },
+  { "id": "chime",    "name": "رنّة",           "file": "chime.wav" },
+  { "id": "bell",     "name": "جرس",           "file": "bell.wav" },
+  { "id": "pop",      "name": "فقاعة",         "file": "pop.wav" },
+  { "id": "alert",    "name": "تنبيه",         "file": "alert.wav" }
+]

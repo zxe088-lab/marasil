@@ -202,6 +202,7 @@ async function loadTone(name){
   let src = null;
   try { src = localStorage.getItem('marasil-tone-' + name); } catch {}
   if (src) toneOrigin[name] = 'device';
+  else if (name === 'sent') { src = 'sounds/sent.mp3'; toneOrigin[name] = 'site'; }
   else if (IS_NATIVE && name !== 'incoming' && name !== 'ping' && TONE_NOTES[name]) {
     // تطبيق الآيفون: ملف bbm.mp3 غير موجود فيه، فنشغّل نغمات التطبيق كملف صوت
     src = synthWav(TONE_NOTES[name]); toneOrigin[name] = 'app';
@@ -284,14 +285,26 @@ function renderTonePicker(){
 }
 // إشعارات الرسائل: لكل نوع (أصدقاء / مجموعات / برودكاست) نغمة + كتم + إشعار خارج التطبيق
 // النغمات موجودة داخل التطبيق نفسه عشان آيفون يقدر يشغّلها في الإشعار وهو مقفل
-const MSG_TONES = { bbm: 'BBM الأصلية', classic: 'كلاسيك', chime: 'رنّة', bell: 'جرس', pop: 'فقاعة', alert: 'تنبيه' };
-const NOTIF_CATS = { friends: 'رسائل الأصدقاء', groups: 'رسائل المجموعات', broadcast: 'رسائل البرودكاست' };
+// النغمات تنقرأ من مجلد sounds/tones (ملف tones.json) — تضيف نغمة جديدة بدون ما تعدّل الكود
+const MSG_TONES = { bbm: 'BBM الأصلية', waqz: 'وكزة', classic: 'كلاسيك', chime: 'رنّة', bell: 'جرس', pop: 'فقاعة', alert: 'تنبيه' };
+const TONE_FILES = { bbm: 'bbm.mp3', waqz: 'waqz.mp3', classic: 'classic.wav', chime: 'chime.wav', bell: 'bell.wav', pop: 'pop.wav', alert: 'alert.wav' };
+const NOTIF_CATS = { friends: 'رسائل الأصدقاء', groups: 'رسائل المجموعات', broadcast: 'رسائل البرودكاست', ping: 'الوكزة (PING)' };
 const NOTIF_DEFAULT = { tone: 'bbm', mute: false, push: true };
-const notifPref = cat => ({ ...NOTIF_DEFAULT, ...(me?.notif?.[cat] || {}) });
-const chatCat = c => c?.isGroup ? 'groups' : c?.lastKind === 'broadcast' ? 'broadcast' : 'friends';
-const toneFile = t => (t === 'bbm' || !MSG_TONES[t]) ? 'sounds/bbm.mp3' : 'sounds/' + t + '.wav';
+const notifPref = cat => ({ ...NOTIF_DEFAULT, ...(cat === 'ping' ? { tone: 'waqz' } : {}), ...(me?.notif?.[cat] || {}) });
+const chatCat = c => c?.lastKind === 'ping' ? 'ping' : c?.isGroup ? 'groups' : c?.lastKind === 'broadcast' ? 'broadcast' : 'friends';
+const toneFile = t => 'sounds/tones/' + (TONE_FILES[t] || TONE_FILES.bbm);
 const msgToneEls = {};
-Object.keys(MSG_TONES).forEach(t => { const a = new Audio(toneFile(t)); a.preload = 'auto'; msgToneEls[t] = a; });
+const makeToneEl = t => { if (msgToneEls[t]) return; const a = new Audio(toneFile(t)); a.preload = 'auto'; msgToneEls[t] = a; };
+Object.keys(MSG_TONES).forEach(makeToneEl);
+fetch('sounds/tones/tones.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : []).then(list => {
+  let added = false;
+  (Array.isArray(list) ? list : []).forEach(x => {
+    if (!x || !/^[a-z0-9-]{1,30}$/.test(x.id || '') || !x.file) return;
+    if (!MSG_TONES[x.id]) added = true;
+    MSG_TONES[x.id] = String(x.name || x.id).slice(0, 30); TONE_FILES[x.id] = String(x.file); makeToneEl(x.id);
+  });
+  if (added && $('notifList')?.childElementCount) renderNotifSettings();
+}).catch(() => {});
 document.addEventListener('pointerdown', () => {
   Object.values(msgToneEls).forEach(a => { a.muted = true; a.play().then(() => { if (!a._want) { a.pause(); try { a.currentTime = 0; } catch {} } a.muted = false; }).catch(() => { a.muted = false; }); });
 }, { once: true, capture: true });
@@ -301,7 +314,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 const arrivedWhileAway = ts => !!(hiddenAt && shownAt > hiddenAt && ts >= hiddenAt - 1000 && ts <= shownAt + 1500 && Date.now() - shownAt < 10000);
 function playMsgTone(t, force){
   if (me?.mute && !force) return;
-  const a = msgToneEls[MSG_TONES[t] ? t : 'bbm'];
+  const a = msgToneEls[MSG_TONES[t] ? t : 'bbm'] || msgToneEls.bbm;
   a._want = true; a.muted = false; try { a.currentTime = 0; } catch {}
   a.play()?.catch(() => SOUNDS.incoming?.());
 }
