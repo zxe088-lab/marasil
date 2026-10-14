@@ -193,7 +193,7 @@ function synthWav(notes){
   return 'data:audio/wav;base64,' + btoa(bin);
 }
 /* نغمات خاصة: 1) ملف يختاره الشخص من جواله (محفوظ في جهازه)  2) ملف في مجلد sounds على السيرفر  3) النغمة الافتراضية */
-const TONE_NAMES = { sent: 'إرسال رسالة', contact: 'تحديثات الأصحاب' };
+const TONE_NAMES = { contact: 'تحديثات الأصحاب' };
 // تشغيل ملفات النغمات عبر عنصر audio، مع احترام قيود التشغيل في النظام.
 const toneEls = {};      // name -> Audio
 const toneOrigin = {};   // 'device' | 'site'
@@ -315,8 +315,9 @@ const arrivedWhileAway = ts => !!(hiddenAt && shownAt > hiddenAt && ts >= hidden
 function playMsgTone(t, force){
   if (me?.mute && !force) return;
   const a = msgToneEls[MSG_TONES[t] ? t : 'bbm'] || msgToneEls.bbm;
+  if (!a || a.error) { SOUNDS[t === 'waqz' ? 'ping' : 'incoming']?.(); return; }
   a._want = true; a.muted = false; try { a.currentTime = 0; } catch {}
-  a.play()?.catch(() => SOUNDS.incoming?.());
+  a.play()?.catch(() => SOUNDS[t === 'waqz' ? 'ping' : 'incoming']?.());
 }
 function renderNotifSettings(){
   const box = $('notifList'); if (!box) return;
@@ -1401,8 +1402,8 @@ async function sendMsg(data, expectedChat = chatId){
   if(data.kind==='voice'){delete messageData.audio;b.set(fs.doc('chats/'+id+'/voiceClips/'+message.id),{from:uid,audio:data.audio,expiresAt});}
   b.set(message,messageData);
   b.update(fs.doc('chats/' + id), { lastMsg: data.kind === 'ping' ? 'PING!!!' : data.kind === 'voice' ? 'رسالة صوتية' : data.kind === 'sticker' ? 'فيس بلاك بيري' : (data.text || '').slice(0, 80), lastTs: ts, lastFrom: uid, lastKind: data.kind || 'text', ['read.' + uid]: ts, ['typing.' + uid]: 0 });
-  if (data.kind !== 'ping') play('sent');
-  try { await b.commit(); notifyPush(id); if (data.kind === 'ping') nudgeEffect(); return true; }
+  if (data.kind === 'ping') nudgeEffect(); // الإرسال بدون صوت؛ الوكزة تهز جوال المرسل بس
+  try { await b.commit(); notifyPush(id); return true; }
   catch (e) { console.error(e); toast('ما وصلت الرسالة، تأكد من الاتصال'); return false; }
 }
 let draftSticker = null;
@@ -1490,7 +1491,7 @@ async function sendOncePhoto(file){
     batch.set(message,{from:uid,ts,kind:'once-photo',opened:false,expiresAt});
     batch.set(fs.doc('chats/'+id+'/oncePhotos/'+message.id),{from:uid,to:recipient,image:payload,expiresAt});
     batch.update(fs.doc('chats/'+id),{lastMsg:'صورة لمرة واحدة',lastTs:ts,lastFrom:uid,lastKind:'once-photo',['read.'+uid]:ts});
-    await batch.commit(); notifyPush(id); play('sent');
+    await batch.commit(); notifyPush(id);
   } catch(error){console.error(error);toast('تعذّر إرسال الصورة، تأكد من الاتصال والصلاحيات');}
   finally {if(objectUrl)URL.revokeObjectURL(objectUrl);photoBusy=false;}
 }
@@ -1676,7 +1677,6 @@ $('bcForm').addEventListener('submit', async e => {
     } catch (err) { console.error(err); }
   }
   bcBusy = false; $('bcSend').disabled = false; $('bcSend').textContent = '📢 إرسال';
-  if (ok) play('sent');
   if (ok === ids.length) { toast('وصل البرودكاست لـ ' + ok + ' ✅'); show('s-home'); }
   else toast('وصلت لـ ' + ok + ' من ' + ids.length + '، الباقي ما وصل');
 });
