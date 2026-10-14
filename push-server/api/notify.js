@@ -6,7 +6,6 @@ const fs = require('fs');
 
 const PROJECT = 'bbm-old-1e477';
 const BUNDLE_ID = 'com.zxe088.bpmold';
-const TONES = ['classic', 'chime', 'bell', 'pop', 'alert'];
 const PREVIEW = { ping: 'PING!!! 👋', voice: '🎤 رسالة صوتية', sticker: 'فيس بلاك بيري 🙂', 'once-photo': '📷 صورة لمرة واحدة' };
 const FS = `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents/`;
 
@@ -85,7 +84,7 @@ module.exports = async (req, res) => {
 
   const to = chat.members.filter(m => m !== uid);
   const [sender, ...users] = await Promise.all([uid, ...to].map(id => getDoc('users/' + id, idToken)));
-  const cat = chat.isGroup ? 'groups' : chat.lastKind === 'broadcast' ? 'broadcast' : 'friends';
+  const cat = chat.lastKind === 'ping' ? 'ping' : chat.isGroup ? 'groups' : chat.lastKind === 'broadcast' ? 'broadcast' : 'friends';
   const name = sender?.name || 'مستخدم';
   const text = PREVIEW[chat.lastKind] || chat.lastMsg || 'رسالة جديدة';
   const title = chat.isGroup ? (chat.name || 'مجموعة') : name;
@@ -103,9 +102,9 @@ module.exports = async (req, res) => {
   let sent = 0;
   try {
     await Promise.all(targets.map(async u => {
-      const p = { tone: 'bbm', mute: false, ...((u.notif || {})[cat] || {}) };
+      const p = { tone: cat === 'ping' ? 'waqz' : 'bbm', mute: false, ...((u.notif || {})[cat] || {}) };
       const aps = { alert: { title, body: alertBody }, 'thread-id': chatId };
-      if (!u.mute && !p.mute) aps.sound = TONES.includes(p.tone) ? p.tone + '.wav' : 'bbm.caf';
+      if (!u.mute && !p.mute) aps.sound = (/^[a-z0-9-]{1,30}$/.test(p.tone || '') ? p.tone : 'bbm') + '.caf';
       const r = await sendApns(client, u.apns, { aps, chatId });
       if (r.status === 200) sent++; else console.error('APNs', r.status, r.data);
       console.log(new Date().toISOString(), 'push', chatId, cat, '->', r.status, r.data || 'ok');

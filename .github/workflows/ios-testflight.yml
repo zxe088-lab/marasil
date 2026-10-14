@@ -47,7 +47,8 @@ jobs:
           cp blackberry-48.png www/
           for f in privacy.html terms.html; do [ -f "$f" ] && cp "$f" www/; done
           cp -R fonts www/fonts
-          mkdir -p www/sounds && cp sounds/bbm.mp3 sounds/*.wav www/sounds/
+          cp -R sounds www/
+          python3 -c "import json;assert len(json.load(open('sounds/tones/tones.json')))>0"
           grep -q 'data-section="pending"' www/index.html
           node --check www/app.js
 
@@ -93,8 +94,13 @@ jobs:
       - name: Push notifications
         run: |
           # نغمة التنبيه لازم تكون داخل التطبيق بصيغة caf
-          afconvert sounds/bbm.mp3 ios/App/App/bbm.caf -d ima4 -f caff -v
-          for t in classic chime bell pop alert; do cp sounds/$t.wav ios/App/App/; done
+          # كل نغمة في sounds/tones تتحول لملف caf باسم الـ id (هذا اللي يشغّله الآيفون في الإشعار)
+          python3 - <<'PY'
+          import json, subprocess
+          for t in json.load(open("sounds/tones/tones.json")):
+              subprocess.run(["afconvert", "sounds/tones/" + t["file"], "ios/App/App/" + t["id"] + ".caf", "-d", "ima4", "-f", "caff"], check=True)
+              print("tone", t["id"])
+          PY
           cat > ios/App/App/App.entitlements <<'EOF'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -132,7 +138,7 @@ jobs:
             p = Xcodeproj::Project.open("ios/App/App.xcodeproj")
             t = p.targets.find { |x| x.name == "App" }
             g = p.main_group.find_subpath("App", false)
-            %w[bbm.caf classic.wav chime.wav bell.wav pop.wav alert.wav].each { |f| t.resources_build_phase.add_file_reference(g.new_reference(f)) }
+            Dir.glob("ios/App/App/*.caf").map { |f| File.basename(f) }.each { |f| t.resources_build_phase.add_file_reference(g.new_reference(f)) }
             g.new_reference("App.entitlements")
             t.build_configurations.each { |c| c.build_settings["CODE_SIGN_ENTITLEMENTS"] = "App/App.entitlements" }
             p.save
