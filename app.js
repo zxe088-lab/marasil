@@ -419,7 +419,7 @@ function boot(){
 
 /* ---------- تسجيل الدخول: جوجل / ابل / إيميل ---------- */
 // في تطبيق الآيفون نستخدم شاشات جوجل وابل الأصلية، ثم ندخل Firebase بنفس الحساب
-const FA = IS_NATIVE ? window.Capacitor?.Plugins?.FirebaseAuthentication : null;
+const FA = IS_NATIVE ? window.Capacitor?.Plugins?.BPBAuth : null;
 let authLinkMode = false, authCreate = false;
 function renderAuth(){
   $('authTitle').textContent = authLinkMode ? 'احفظ حسابك' : authCreate ? 'إنشاء حساب' : 'تسجيل الدخول إلى حسابك';
@@ -435,10 +435,10 @@ const authCancelled = e => /cancel|1001|popup-closed|cancelled-popup/i.test((e?.
 async function nativeCredential(kind){
   if (kind === 'google') {
     const r = await FA.signInWithGoogle();
-    return firebase.auth.GoogleAuthProvider.credential(r?.credential?.idToken || null, r?.credential?.accessToken || null);
+    return firebase.auth.GoogleAuthProvider.credential(r?.idToken || null, r?.accessToken || null);
   }
   const r = await FA.signInWithApple();
-  return new firebase.auth.OAuthProvider('apple.com').credential({ idToken: r?.credential?.idToken, rawNonce: r?.credential?.nonce });
+  return new firebase.auth.OAuthProvider('apple.com').credential({ idToken: r?.idToken, rawNonce: r?.nonce });
 }
 async function socialAuth(kind, link){
   const u = auth.currentUser;
@@ -449,6 +449,7 @@ async function socialAuth(kind, link){
       if (link && u) await u.linkWithCredential(cred); else await auth.signInWithCredential(cred);
     } else {
       if (kind !== 'google') return;
+      if (IS_NATIVE) { toast('تسجيل الدخول بجوجل غير متاح في هذي النسخة، استخدم الإيميل'); return; }
       if (link && u) await u.linkWithPopup(gProvider()); else await auth.signInWithPopup(gProvider());
     }
     if (link) { await auth.currentUser?.reload(); renderAccount(); toast('تم ربط حسابك ✅ رمز PIN حقك محفوظ'); if (!$('s-login').hidden) show('s-home', false); }

@@ -151,6 +151,7 @@ jobs:
       - name: Sign in with Google and Apple
         run: |
           cp GoogleService-Info.plist ios/App/App/GoogleService-Info.plist
+          cp ios-plugin/BPBAuthPlugin.swift ios/App/App/BPBAuthPlugin.swift
           REV=$(/usr/libexec/PlistBuddy -c "Print :REVERSED_CLIENT_ID" ios/App/App/GoogleService-Info.plist)
           PLIST=ios/App/App/Info.plist
           /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes array" "$PLIST" || true
@@ -163,13 +164,25 @@ jobs:
             t = p.targets.find { |x| x.name == "App" }
             g = p.main_group.find_subpath("App", false)
             t.resources_build_phase.add_file_reference(g.new_reference("GoogleService-Info.plist"))
-            # مكتبة الدخول مبنية static: بدون -ObjC ينحذف كودها من التطبيق وما يلقاها
-            t.build_configurations.each { |c| c.build_settings["OTHER_LDFLAGS"] = ["$(inherited)", "-ObjC"] }
+            t.source_build_phase.add_file_reference(g.new_reference("BPBAuthPlugin.swift"))
             p.save
           '
-          # تسجيل الدخول بجوجل يحتاج مكتبة GoogleSignIn
-          sed -i '' "s#pod 'CapacitorFirebaseAuthentication', :path => '\(.*\)'#pod 'CapacitorFirebaseAuthentication/Google', :path => '\1'#" ios/App/Podfile
-          grep -n "CapacitorFirebaseAuthentication/Google" ios/App/Podfile
+          # أداة الدخول الخاصة بالتطبيق: نسجلها في Capacitor ونضيف مكتبة GoogleSignIn
+          python3 - <<'PY'
+          import json, re
+          p = "ios/App/App/capacitor.config.json"
+          c = json.load(open(p))
+          c.setdefault("packageClassList", [])
+          if "BPBAuthPlugin" not in c["packageClassList"]: c["packageClassList"].append("BPBAuthPlugin")
+          json.dump(c, open(p, "w"), indent="\t")
+          f = "ios/App/Podfile"
+          s = open(f).read()
+          s2 = re.sub(r"(target 'App' do\n\s*capacitor_pods\n)", r"\1  pod 'GoogleSignIn', '7.1.0'\n", s, count=1)
+          assert s2 != s, "Podfile pattern not found"
+          open(f, "w").write(s2)
+          PY
+          grep -n "GoogleSignIn" ios/App/Podfile
+          grep -n "BPBAuthPlugin" ios/App/App/capacitor.config.json
           cd ios/App && pod install
 
       - name: Restrict app to iPhone
