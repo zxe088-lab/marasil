@@ -8,7 +8,7 @@ on:
       version:
         description: "App version (CFBundleShortVersionString)"
         required: false
-        default: "1.3.0"
+        default: "1.4.0"
 
 jobs:
   ios-release:
@@ -83,7 +83,7 @@ jobs:
       - name: App settings
         run: |
           PLIST=ios/App/App/Info.plist
-          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${{ inputs.version || '1.3.0' }}" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${{ inputs.version || '1.4.0' }}" "$PLIST"
           /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName $APP_NAME" "$PLIST" \
             || /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string $APP_NAME" "$PLIST"
           /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" "$PLIST" || true
@@ -108,6 +108,8 @@ jobs:
           <dict>
             <key>aps-environment</key>
             <string>production</string>
+            <key>com.apple.developer.applesignin</key>
+            <array><string>Default</string></array>
           </dict>
           </plist>
           EOF
@@ -146,6 +148,28 @@ jobs:
           grep -q bbm.caf ios/App/App.xcodeproj/project.pbxproj
           grep -q App.entitlements ios/App/App.xcodeproj/project.pbxproj
 
+      - name: Sign in with Google and Apple
+        run: |
+          cp GoogleService-Info.plist ios/App/App/GoogleService-Info.plist
+          REV=$(/usr/libexec/PlistBuddy -c "Print :REVERSED_CLIENT_ID" ios/App/App/GoogleService-Info.plist)
+          PLIST=ios/App/App/Info.plist
+          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes array" "$PLIST" || true
+          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0 dict" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes array" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes:0 string $REV" "$PLIST"
+          ruby -e '
+            require "xcodeproj"
+            p = Xcodeproj::Project.open("ios/App/App.xcodeproj")
+            t = p.targets.find { |x| x.name == "App" }
+            g = p.main_group.find_subpath("App", false)
+            t.resources_build_phase.add_file_reference(g.new_reference("GoogleService-Info.plist"))
+            p.save
+          '
+          # تسجيل الدخول بجوجل يحتاج مكتبة GoogleSignIn
+          sed -i '' "s#pod 'CapacitorFirebaseAuthentication', :path => '\(.*\)'#pod 'CapacitorFirebaseAuthentication/Google', :path => '\1'#" ios/App/Podfile
+          grep -n "CapacitorFirebaseAuthentication/Google" ios/App/Podfile
+          cd ios/App && pod install
+
       - name: Restrict app to iPhone
         run: |
           python3 - <<'PY'
@@ -166,7 +190,7 @@ jobs:
           # تفعيل خاصية الإشعارات على معرّف التطبيق (لو كانت مفعلة ما يصير شي)
           BID=$(app-store-connect bundle-ids list --bundle-id-identifier "$BUNDLE_ID" --strict-match-identifier --json \
             | python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["id"])') \
-            && app-store-connect bundle-ids enable-capabilities "$BID" --capability 'Push Notifications' || true
+            && app-store-connect bundle-ids enable-capabilities "$BID" --capability 'Push Notifications' 'Sign In with Apple' || true
           app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_STORE --create
           keychain add-certificates
           xcode-project use-profiles

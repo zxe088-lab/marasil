@@ -40,18 +40,22 @@
     <button type="button" class="btn primary" id="errRetry" hidden>حاول مرة ثانية · Try again</button>
   </section>
 
-  <section id="s-login" class="screen" hidden>
-    <div class="setup-icon"><svg><use href="#i-chats"/></svg></div>
-    <h1>BPB OLD</h1>
-    <p>ادخل بحساب قوقل عشان يبقى حسابك ورمز PIN حقك محفوظ، حتى لو غيّرت جوالك.</p>
-    <button type="button" class="btn primary" id="googleLoginBtn">الدخول بحساب قوقل</button>
-    <button type="button" class="btn" id="anonLoginBtn">الدخول بدون حساب</button>
-    <button type="button" class="btn" id="emailLoginBtn">دخول المالك بالإيميل</button>
+  <section id="s-login" class="screen auth-dark" hidden>
+    <h1 id="authTitle">تسجيل الدخول إلى حسابك</h1>
+    <p class="auth-sub" id="authSub">رمز PIN حقك يرتبط بحسابك ويبقى معك حتى لو غيّرت جوالك.</p>
+    <div class="auth-btns">
+      <button type="button" class="auth-pill" id="googleLoginBtn"><svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.4 5.7c4.3-4 6.9-9.9 6.9-17.1z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-2.9-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.7c-2.1 1.4-4.8 2.3-8.5 2.3-6.2 0-11.5-4.1-13.4-9.9l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg><span>المتابعة مع جوجل</span></button>
+      <button type="button" class="auth-pill" id="appleLoginBtn"><svg viewBox="0 0 814 1000" aria-hidden="true"><path fill="#fff" d="M788 341c-6 4-108 62-108 190 0 148 130 200 134 202-1 3-21 72-69 142-43 62-88 124-156 124s-86-40-165-40c-77 0-104 41-166 41s-106-58-156-128C44 790 0 669 0 554 0 370 120 272 238 272c63 0 115 41 155 41 38 0 97-44 168-44 27 0 125 2 189 72zM554 168c29-35 50-83 50-132 0-7-1-14-2-19-48 2-104 32-138 71-27 30-52 78-52 128 0 7 1 15 2 17 3 1 8 1 13 1 43 0 97-29 127-66z"/></svg><span>المتابعة مع ابل</span></button>
+      <button type="button" class="auth-pill" id="emailLoginBtn"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3" fill="none" stroke="#fff" stroke-width="1.8"/><path d="M4 7l8 6 8-6" fill="none" stroke="#fff" stroke-width="1.8"/></svg><span>المتابعة بالإيميل</span></button>
+    </div>
+    <button type="button" class="auth-switch" id="authSwitch"></button>
+    <button type="button" class="auth-switch" id="authLater" hidden>لاحقاً</button>
+    <p class="auth-terms">بالمتابعة توافق على <a href="https://zxe088-lab.github.io/marasil/terms.html" target="_blank" rel="noopener">شروط الاستخدام</a> و<a href="https://zxe088-lab.github.io/marasil/privacy.html" target="_blank" rel="noopener">سياسة الخصوصية</a></p>
   </section>
 
-  <section id="s-email" class="screen" hidden>
+  <section id="s-email" class="screen auth-dark" hidden>
     <div class="setup-icon"><svg><use href="#i-chats"/></svg></div>
-    <h1 id="emailTitle">دخول المالك بالإيميل</h1>
+    <h1 id="emailTitle">تسجيل الدخول بالإيميل</h1>
     <p class="hint" id="emailIntro"></p>
     <input id="emailInput" type="email" inputmode="email" maxlength="120" placeholder="الإيميل · Email" autocomplete="email" autocapitalize="off" autocorrect="off" dir="ltr">
     <input id="emailPass" type="password" maxlength="128" placeholder="كلمة المرور · Password" autocomplete="current-password" dir="ltr">
@@ -63,14 +67,13 @@
   <section id="s-setup" class="screen" hidden>
     <div class="setup-icon"><svg><use href="#i-chats"/></svg></div>
     <h1>أهلاً في BPB OLD</h1>
-    <p id="setupIntro">اكتب اسم العرض حقك وأرسل طلب انضمام. بعد موافقة المالك يوصلك رمز PIN خاص، وأصحابك يضيفونك فيه بدل رقم جوالك.</p>
-    <p class="hint" dir="ltr">Enter a display name, accept the terms, and tap Join. With an invite code you get in immediately; otherwise the owner approves your request.</p>
+    <p id="setupIntro">اكتب اسم العرض حقك. بيوصلك رمز PIN خاص يبدأ بـ 2A، وأصحابك يضيفونك فيه بدل رقم جوالك.</p>
+    <p class="hint" dir="ltr">Enter a display name, accept the terms, and tap Join. You get your own PIN right away.</p>
     <div id="setupForm">
     <input id="setupName" maxlength="40" placeholder="اسم العرض · Display name" autocomplete="off">
-    <input id="setupInvite" maxlength="12" placeholder="Invite code · رمز الدعوة" autocomplete="off" autocapitalize="characters" dir="ltr">
     <label class="check agree"><input type="checkbox" id="agreeTerms"> I agree · أوافق على <a href="https://zxe088-lab.github.io/marasil/terms.html" target="_blank" rel="noopener">شروط الاستخدام</a> و<a href="https://zxe088-lab.github.io/marasil/privacy.html" target="_blank" rel="noopener">سياسة الخصوصية</a></label>
-    <button type="button" class="btn primary" id="setupBtn">إرسال طلب الانضمام · Join</button>
-    <button type="button" class="btn" id="setupEmailBtn">دخول المالك بالإيميل · Owner sign-in</button>
+    <button type="button" class="btn primary" id="setupBtn">ابدأ · Join</button>
+    <button type="button" class="btn" id="setupOtherBtn">الدخول بحساب ثاني</button>
     </div>
     <div id="setupWait" class="setup-wait" hidden><p id="setupWaitText"></p><button type="button" class="btn" id="setupRetry" hidden>إرسال طلب جديد</button></div>
   </section>
@@ -222,8 +225,9 @@
           <div class="lbl">الحساب</div>
           <div class="hint" id="accState"></div>
           <div class="kv spread acc-id"><span class="hint">معرّف الحساب: <bdi id="accId"></bdi></span><button type="button" class="btn sm" id="accIdCopy">نسخ</button></div>
-          <button type="button" class="btn primary" id="linkGoogleBtn">ربط حسابي بقوقل</button>
-          <button type="button" class="btn primary" id="linkEmailBtn" hidden>ربط إيميل المالك</button>
+          <button type="button" class="btn primary" id="linkGoogleBtn">ربط حسابي بجوجل</button>
+          <button type="button" class="btn primary" id="linkAppleBtn" hidden>ربط حسابي بابل</button>
+          <button type="button" class="btn primary" id="linkEmailBtn" hidden>ربط حسابي بإيميل</button>
           <button type="button" class="btn" id="photoDel">إزالة صورة العرض</button>
           <button type="button" class="btn danger" id="signOutBtn">تسجيل خروج</button>
           <button type="button" class="btn danger" id="deleteAccBtn">حذف الحساب</button>

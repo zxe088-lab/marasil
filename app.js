@@ -91,7 +91,8 @@ const saveLocal = () => { try { localStorage.setItem('marasil-closed', JSON.stri
 /* ---------- أدوات ---------- */
 function toast(t){ const e = $('toast'); e.textContent = t; e.hidden = false; clearTimeout(e._t); e._t = setTimeout(() => e.hidden = true, 2800); }
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
-const newPin = () => Array.from(crypto.getRandomValues(new Uint8Array(4)), b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+// رمز PIN: 8 خانات يبدأ بـ 2A ثم 6 خانات عشوائية
+const newPin = () => '2A' + Array.from(crypto.getRandomValues(new Uint8Array(3)), b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
 const fmtTime = (ts, tz) => new Date(ts).toLocaleTimeString('ar-SA', { hour: 'numeric', minute: '2-digit', ...(tz ? { timeZone: tz } : {}) });
 const fmtDay = ts => new Date(ts).toLocaleDateString('ar-SA-u-ca-gregory', { weekday: 'long', day: 'numeric', month: 'long' });
 function ago(ts){
@@ -410,13 +411,59 @@ function boot(){
   }
   firebase.initializeApp(cfg);
   auth = firebase.auth(); fs = firebase.firestore();
-  auth.onAuthStateChanged(u => { authSeen = true; if (u) start(u.uid); else if (IS_NATIVE) anonSignIn(); else show('s-login', false); });
+  auth.onAuthStateChanged(u => { authSeen = true; if (u) start(u.uid); else openAuth(false); });
   // إذا ما رد Firebase خلال 12 ثانية نعرض زر إعادة المحاولة بدل شاشة تحميل معلّقة
   setTimeout(() => { if (!authSeen && !uid) authFail('timeout'); }, 12000);
-  if (!IS_NATIVE) auth.getRedirectResult?.().then(r => { if (r?.operationType === 'link') toast('تم ربط حسابك بقوقل ✅'); }).catch(authError);
+  if (!IS_NATIVE) auth.getRedirectResult?.().then(r => { if (r?.operationType === 'link') toast('تم ربط حسابك ✅'); }).catch(authError);
 }
 
-/* ---------- تسجيل الدخول بقوقل ---------- */
+/* ---------- تسجيل الدخول: جوجل / ابل / إيميل ---------- */
+// في تطبيق الآيفون نستخدم شاشات جوجل وابل الأصلية، ثم ندخل Firebase بنفس الحساب
+const FA = IS_NATIVE ? window.Capacitor?.Plugins?.FirebaseAuthentication : null;
+let authLinkMode = false, authCreate = false;
+function renderAuth(){
+  $('authTitle').textContent = authLinkMode ? 'احفظ حسابك' : authCreate ? 'إنشاء حساب' : 'تسجيل الدخول إلى حسابك';
+  $('authSub').textContent = authLinkMode
+    ? 'اربط حسابك بجوجل أو ابل أو الإيميل عشان يبقى رمز PIN حقك وأصحابك معك حتى لو غيّرت جوالك.'
+    : 'رمز PIN حقك يرتبط بحسابك ويبقى معك حتى لو غيّرت جوالك.';
+  $('authSwitch').hidden = authLinkMode; $('authLater').hidden = !authLinkMode;
+  $('authSwitch').innerHTML = authCreate ? 'عندك حساب؟ <b>تسجيل الدخول</b>' : 'ما عندك حساب؟ <b>إنشاء حساب</b>';
+  $('appleLoginBtn').hidden = !FA;
+}
+function openAuth(linkMode){ authLinkMode = !!linkMode; renderAuth(); show('s-login', false); }
+const authCancelled = e => /cancel|1001|popup-closed|cancelled-popup/i.test((e?.code || '') + ' ' + (e?.message || ''));
+async function nativeCredential(kind){
+  if (kind === 'google') {
+    const r = await FA.signInWithGoogle();
+    return firebase.auth.GoogleAuthProvider.credential(r?.credential?.idToken || null, r?.credential?.accessToken || null);
+  }
+  const r = await FA.signInWithApple();
+  return new firebase.auth.OAuthProvider('apple.com').credential({ idToken: r?.credential?.idToken, rawNonce: r?.credential?.nonce });
+}
+async function socialAuth(kind, link){
+  const u = auth.currentUser;
+  let cred = null;
+  try {
+    if (FA) {
+      cred = await nativeCredential(kind);
+      if (link && u) await u.linkWithCredential(cred); else await auth.signInWithCredential(cred);
+    } else {
+      if (kind !== 'google') return;
+      if (link && u) await u.linkWithPopup(gProvider()); else await auth.signInWithPopup(gProvider());
+    }
+    if (link) { await auth.currentUser?.reload(); renderAccount(); toast('تم ربط حسابك ✅ رمز PIN حقك محفوظ'); if (!$('s-login').hidden) show('s-home', false); }
+  } catch (e) {
+    if (authCancelled(e)) return;
+    if (link && (e.code === 'auth/credential-already-in-use' || e.code === 'auth/email-already-in-use')) {
+      const ok = await askText('هذا الحساب مربوط بحساب ثاني في ' + APP_NAME + '. اكتب "دخول" إذا تبي تنتقل له (حسابك الحالي بيضيع)');
+      const c = cred || e.credential;
+      if (ok === 'دخول' && c) { await auth.signInWithCredential(c).catch(authError); location.reload(); }
+      return;
+    }
+    if (!FA && popupIssue(e)) return (link && u ? u.linkWithRedirect(gProvider()) : auth.signInWithRedirect(gProvider())).catch(authError);
+    authError(e);
+  }
+}
 function gProvider(){ const p = new firebase.auth.GoogleAuthProvider(); p.setCustomParameters({ prompt: 'select_account' }); return p; }
 const popupIssue = e => ['auth/popup-blocked', 'auth/operation-not-supported-in-this-environment', 'auth/web-storage-unsupported'].includes(e?.code);
 function authError(e){
@@ -429,10 +476,7 @@ function authError(e){
   else if (c === 'auth/network-request-failed') toast('تأكد من اتصال الإنترنت');
   else toast('ما قدرنا نسجل الدخول، جرّب مرة ثانية');
 }
-async function googleSignIn(){
-  try { await auth.signInWithPopup(gProvider()); }
-  catch (e) { if (popupIssue(e)) return auth.signInWithRedirect(gProvider()).catch(authError); authError(e); }
-}
+async function googleSignIn(){ return socialAuth('google', false); }
 let authSeen = false;
 function authFail(code){
   $('errText').textContent = 'ما قدرنا نسجل الدخول. تأكد من اتصال الإنترنت وجرّب مرة ثانية.' + (code ? ' (' + code + ')' : '');
@@ -445,7 +489,7 @@ async function anonSignIn(){
     catch (e) { console.error(e); if (i === 2) { authFail(e?.code || 'error'); return; } await new Promise(r => setTimeout(r, 1500 * (i + 1))); }
   }
 }
-$('errRetry').addEventListener('click', () => { $('errRetry').hidden = true; show('s-loading', false); if (auth?.currentUser) location.reload(); else if (auth) anonSignIn(); else location.reload(); });
+$('errRetry').addEventListener('click', () => { $('errRetry').hidden = true; show('s-loading', false); location.reload(); });
 async function linkGoogle(){
   const u = auth.currentUser; if (!u) return;
   try { await u.linkWithPopup(gProvider()); await u.reload(); toast('تم ربط حسابك بقوقل ✅'); renderAccount(); }
@@ -465,14 +509,14 @@ async function linkGoogle(){
 let emailMode = 'login', emailReturn = 's-login';
 function openEmailScreen(mode, from){
   emailMode = mode; emailReturn = from || 's-login';
-  const link = mode === 'link';
-  $('emailTitle').textContent = link ? 'ربط إيميل المالك' : 'دخول المالك بالإيميل';
+  const link = mode === 'link', signup = mode === 'signup';
+  $('emailTitle').textContent = link ? 'ربط حسابك بإيميل' : signup ? 'إنشاء حساب بالإيميل' : 'تسجيل الدخول بالإيميل';
   $('emailIntro').textContent = link
-    ? 'اختر إيميل وكلمة مرور (8 خانات أو أكثر). بعد الربط تدخل بهم من أي جهاز وتبقى مالك التطبيق بنفس حسابك.'
-    : 'ادخل بالإيميل وكلمة المرور اللي ربطتهم بحساب المالك.';
-  $('emailSubmit').textContent = link ? 'ربط الإيميل' : 'دخول';
-  $('emailPass').autocomplete = link ? 'new-password' : 'current-password';
-  $('emailReset').hidden = link;
+    ? 'اختر إيميل وكلمة مرور (8 خانات أو أكثر). بعد الربط تدخل بهم من أي جهاز بنفس حسابك ورمز PIN حقك.'
+    : signup ? 'اكتب إيميلك واختر كلمة مرور (8 خانات أو أكثر).' : 'ادخل بالإيميل وكلمة المرور حق حسابك.';
+  $('emailSubmit').textContent = link ? 'ربط الإيميل' : signup ? 'إنشاء الحساب' : 'دخول';
+  $('emailPass').autocomplete = link || signup ? 'new-password' : 'current-password';
+  $('emailReset').hidden = link || signup;
   $('emailPass').value = '';
   show('s-email');
 }
@@ -493,13 +537,17 @@ function emailAuthError(e){
 $('emailSubmit').addEventListener('click', async () => {
   const email = $('emailInput').value.trim(), pass = $('emailPass').value;
   if (!email || !pass) { toast('اكتب الإيميل وكلمة المرور'); return; }
-  if (emailMode === 'link' && pass.length < 8) { toast('كلمة المرور لازم تكون 8 خانات أو أكثر'); return; }
+  if ((emailMode === 'link' || emailMode === 'signup') && pass.length < 8) { toast('كلمة المرور لازم تكون 8 خانات أو أكثر'); return; }
   $('emailSubmit').disabled = true;
   try {
     if (emailMode === 'link') {
       const u = auth.currentUser; if (!u) return;
       await u.linkWithCredential(firebase.auth.EmailAuthProvider.credential(email, pass));
-      await u.reload(); $('emailPass').value = ''; renderAccount(); toast('تم ربط الإيميل ✅ تقدر تدخل فيه من أي جهاز'); back();
+      await u.reload(); $('emailPass').value = ''; renderAccount(); toast('تم ربط الإيميل ✅ تقدر تدخل فيه من أي جهاز');
+      if (emailReturn === 's-login') show('s-home', false); else back();
+    } else if (emailMode === 'signup') {
+      await auth.createUserWithEmailAndPassword(email, pass);
+      $('emailPass').value = ''; location.reload();
     } else {
       await auth.signInWithEmailAndPassword(email, pass);
       $('emailPass').value = ''; location.reload();
@@ -512,17 +560,22 @@ $('emailReset').addEventListener('click', async () => {
   if (!email) { toast('اكتب الإيميل أول'); return; }
   try { await auth.sendPasswordResetEmail(email); toast('إذا الإيميل مسجّل بيوصلك رابط إعادة تعيين كلمة المرور'); } catch (e) { emailAuthError(e); }
 });
-$('emailCancel').addEventListener('click', () => { $('emailPass').value = ''; if (emailMode === 'link') back(); else show(emailReturn, false); });
-$('emailLoginBtn').addEventListener('click', () => openEmailScreen('login', 's-login'));
-$('setupEmailBtn').addEventListener('click', () => openEmailScreen('login', 's-setup'));
+$('emailCancel').addEventListener('click', () => { $('emailPass').value = ''; if (emailMode === 'link' && emailReturn !== 's-login') back(); else show(emailReturn, false); });
+$('emailLoginBtn').addEventListener('click', () => openEmailScreen(authLinkMode ? 'link' : authCreate ? 'signup' : 'login', 's-login'));
 $('linkEmailBtn').addEventListener('click', () => openEmailScreen('link'));
+$('authSwitch').addEventListener('click', () => { authCreate = !authCreate; renderAuth(); });
+$('authLater').addEventListener('click', () => show('s-home', false));
+$('appleLoginBtn').addEventListener('click', () => socialAuth('apple', authLinkMode));
+$('linkAppleBtn').addEventListener('click', () => socialAuth('apple', true));
+$('setupOtherBtn').addEventListener('click', async () => { await FA?.signOut?.().catch(() => {}); await auth.signOut(); location.reload(); });
 
 async function signOutNow(){
   const u = auth.currentUser;
   if (u?.isAnonymous) {
-    const ok = await askText('حسابك مو مربوط بقوقل، لو طلعت بيضيع نهائياً. اكتب "خروج" للتأكيد');
+    const ok = await askText('حسابك مو مربوط بجوجل أو ابل أو إيميل، لو طلعت بيضيع نهائياً. اكتب "خروج" للتأكيد');
     if (ok !== 'خروج') return;
   }
+  await FA?.signOut?.().catch(() => {});
   await auth.signOut(); location.reload();
 }
 function renderAccount(){
@@ -530,13 +583,12 @@ function renderAccount(){
   $('accId').textContent = u.uid;
   const pw = (u.providerData || []).find(p => p.providerId === 'password');
   const pwText = pw ? 'مربوط بالإيميل: ' + (pw.email || u.email || '') : '';
-  $('linkEmailBtn').hidden = !isOwner(u.uid) || !!pw;
-  if (IS_NATIVE) {
-    $('accState').textContent = pwText || 'حسابك محفوظ في هذا الجهاز. إذا حذفت التطبيق بيضيع الحساب.';
-    $('linkGoogleBtn').hidden = true; $('signOutBtn').hidden = !pw;
-    return;
-  }
+  $('linkEmailBtn').hidden = !!pw;
+  const ap = (u.providerData || []).find(p => p.providerId === 'apple.com');
+  $('linkAppleBtn').hidden = !FA || !!ap;
+  $('signOutBtn').hidden = u.isAnonymous;
   const g = (u.providerData || []).find(p => p.providerId === 'google.com');
+  if (ap && !g) { $('accState').textContent = 'مربوط بابل' + (ap.email ? ': ' + ap.email : ''); $('linkGoogleBtn').hidden = false; return; }
   $('accState').textContent = g ? 'مربوط بقوقل: ' + (g.email || u.email || '') : pwText || 'حسابك مو مربوط. لو مسحت بيانات المتصفح أو غيّرت جوالك بيضيع حسابك.';
   $('linkGoogleBtn').hidden = !!g;
 }
@@ -579,18 +631,18 @@ async function reportUser(id){
     toast('وصل البلاغ، بنراجعه خلال 24 ساعة. تقدر تحظره بعد.');
   } catch (e) { console.error(e); toast('ما قدرنا نرسل البلاغ، جرّب مرة ثانية'); }
 }
-$('googleLoginBtn').addEventListener('click', googleSignIn);
-$('anonLoginBtn').addEventListener('click', anonSignIn);
-$('linkGoogleBtn').addEventListener('click', linkGoogle);
+$('googleLoginBtn').addEventListener('click', () => socialAuth('google', authLinkMode));
+$('linkGoogleBtn').addEventListener('click', () => socialAuth('google', true));
 $('signOutBtn').addEventListener('click', signOutNow);
 
 function start(id){
   if (uid) return; uid = id;
   fs.doc('users/' + uid).onSnapshot(s => {
     const had = !!me; me = s.exists ? s.data() : null;
-    if (!me) { show('s-setup', false); watchMyJoin(); return; }
+    if (!me) { if (auth.currentUser?.isAnonymous && !isOwner(uid)) { auth.signOut().then(() => location.reload()); return; } show('s-setup', false); watchMyJoin(); return; }
     if (!had) {
       show('s-home', false); listen(); heartbeat(); setupPush();
+      if (auth.currentUser?.isAnonymous) setTimeout(() => { if (!$('s-home').hidden) openAuth(true); }, 900);
       // ميزة تغيير الرمز لصاحب التطبيق فقط (مسجّل في مجموعة admins)
       $('pinAdminCard').hidden = !isOwner(uid);
       if (isOwner(uid)) watchJoinRequests();
@@ -606,7 +658,7 @@ $('setupBtn').addEventListener('click', async () => {
   $('setupBtn').disabled = true;
   const invite = ($('setupInvite')?.value || '').trim().toUpperCase();
   try {
-    if (isOwner(uid) || (invite && inviteOk(invite))) {
+    if (isOwner(uid) || !auth.currentUser?.isAnonymous || (invite && inviteOk(invite))) {
       let pin;
       for (let i = 0; i < 5; i++) { pin = newPin(); if (!(await fs.doc('pins/' + pin).get()).exists) break; }
       await fs.doc('pins/' + pin).set({ uid });
@@ -1695,7 +1747,7 @@ function setupState(form, text, retry){
   $('setupWaitText').textContent = text || ''; $('setupRetry').hidden = !retry;
 }
 function watchMyJoin(){
-  if (myJoinUnsub || isOwner(uid)) { setupState(true); return; }
+  if (myJoinUnsub || isOwner(uid) || !auth.currentUser?.isAnonymous) { setupState(true); return; }
   myJoinUnsub = fs.doc('joinRequests/' + uid).onSnapshot(async s => {
     const r = s.exists ? s.data() : null;
     if (!r) { setupState(true); return; }
