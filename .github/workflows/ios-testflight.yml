@@ -163,6 +163,8 @@ jobs:
             t = p.targets.find { |x| x.name == "App" }
             g = p.main_group.find_subpath("App", false)
             t.resources_build_phase.add_file_reference(g.new_reference("GoogleService-Info.plist"))
+            # مكتبة الدخول مبنية static: بدون -ObjC ينحذف كودها من التطبيق وما يلقاها
+            t.build_configurations.each { |c| c.build_settings["OTHER_LDFLAGS"] = ["$(inherited)", "-ObjC"] }
             p.save
           '
           # تسجيل الدخول بجوجل يحتاج مكتبة GoogleSignIn

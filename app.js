@@ -474,7 +474,7 @@ function authError(e){
   if (c === 'auth/unauthorized-domain') toast('لازم تضيف zxe088-lab.github.io في Authorized domains داخل Firebase');
   else if (c === 'auth/operation-not-allowed') toast('لازم تفعّل الدخول بقوقل (Google) داخل Firebase');
   else if (c === 'auth/network-request-failed') toast('تأكد من اتصال الإنترنت');
-  else toast('ما قدرنا نسجل الدخول، جرّب مرة ثانية');
+  else toast('ما قدرنا نسجل الدخول، جرّب مرة ثانية' + (c || e.message ? ' (' + (c || String(e.message).slice(0, 60)) + ')' : ''));
 }
 async function googleSignIn(){ return socialAuth('google', false); }
 let authSeen = false;
