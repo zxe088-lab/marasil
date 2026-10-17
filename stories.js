@@ -2,73 +2,160 @@
 'use strict';
 window.BPBStories = (() => {
   const base = window.STORIES_URL || 'https://51-254-218-100.sslip.io/api/stories';
-  let feed=[],offset=0,lastFetch=0,loading=false,account='',queue=[],position=0,sequence=0,blobUrl=null,timer=null,deadline=0,busy=false,preview=null,focusBefore=null;
+  let feed=[],offset=0,lastFetch=0,loading=false,account='',queue=[],position=0,sequence=0,blobUrl=null,timer=null,deadline=0,busy=false,preview=null,focusBefore=null,editCanvas=null;
   const now=()=>Date.now()+offset;
   const alive=s=>s && s.expiresAt>now();
-  const strip=document.createElement('section');strip.className='stories-strip';strip.setAttribute('aria-label','اليوميات');
+  const strip=document.createElement('section');strip.className='stories-strip';strip.setAttribute('aria-label','الستوري');
   document.querySelector('#s-home .classic-menu').prepend(strip);
-  const modal=document.createElement('div');modal.className='story-modal';modal.hidden=true;modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');modal.setAttribute('aria-label','اليوميات');
-  modal.innerHTML=`<div class="story-progress" aria-hidden="true"></div><header><strong class="story-name"></strong><button type="button" data-action="close" aria-label="إغلاق اليومية">×</button></header><div class="story-stage"><img alt="صورة اليومية"><button type="button" class="story-prev" aria-label="اليومية السابقة">‹</button><button type="button" class="story-next" aria-label="اليومية التالية">›</button><p class="story-status" role="status"></p></div><div class="story-tools"></div><form class="story-reply"><input maxlength="2000" placeholder="رد خاص على اليومية…" aria-label="الرد على اليومية"><button type="button" data-action="photo">صورة</button><button type="submit">إرسال</button></form>`;
+  const modal=document.createElement('div');modal.className='story-modal';modal.hidden=true;modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');modal.setAttribute('aria-label','الستوري');
+  modal.innerHTML=`<div class="story-progress" aria-hidden="true"></div><header><strong class="story-name"></strong><button type="button" data-action="close" aria-label="إغلاق الستوري">×</button></header><div class="story-stage"><img alt="صورة الستوري"><button type="button" class="story-prev" aria-label="الستوري السابقة">‹</button><button type="button" class="story-next" aria-label="الستوري التالية">›</button><p class="story-status" role="status"></p></div><div class="story-tools"></div><form class="story-reply"><input maxlength="2000" placeholder="رد خاص على الستوري…" aria-label="الرد على الستوري"><button type="button" data-action="photo">صورة</button><button type="submit">إرسال</button></form>`;
   document.body.append(modal);
   const img=modal.querySelector('img'),status=modal.querySelector('.story-status'),tools=modal.querySelector('.story-tools'),form=modal.querySelector('form'),input=form.querySelector('input');
+  editCanvas=document.createElement('canvas');editCanvas.className='story-edit';editCanvas.hidden=true;editCanvas.setAttribute('aria-label','معاينة الستوري');modal.querySelector('.story-stage').prepend(editCanvas);
   const picker=document.createElement('input');picker.type='file';picker.accept='image/*';picker.hidden=true;document.body.append(picker);
   const photoReply=document.createElement('input');photoReply.type='file';photoReply.accept='image/*';photoReply.hidden=true;document.body.append(photoReply);
   const button=(label,fn)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=fn;return b;};
-  function message(e){toast(e.message||'تعذّر الاتصال بخدمة اليوميات');}
+  function message(e){toast(e.message||'تعذّر الاتصال بخدمة الستوري');}
   async function api(suffix='',options={}) {
     const user=auth?.currentUser;if(!user)throw new Error('سجل الدخول أولًا');
     const token=await user.getIdToken(), controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),30000);
     try{
       const response=await fetch(base+suffix,{...options,cache:'no-store',signal:controller.signal,headers:{Authorization:'Bearer '+token,...(options.body?{'Content-Type':'application/json'}:{})}});
-      if(!response.ok){let text='تعذّر الاتصال بخدمة اليوميات';try{text=(await response.json()).error||text;}catch{}throw new Error(text);}
+      if(!response.ok){let text='تعذّر الاتصال بخدمة الستوري';try{text=(await response.json()).error||text;}catch{}throw new Error(text);}
       if(auth.currentUser?.uid!==user.uid)throw new Error('تغيّر الحساب');
       if(options.media)return response.blob();return response.json();
     }finally{clearTimeout(timeout);}
   }
-  function clearMedia(){img.removeAttribute('src');if(blobUrl)URL.revokeObjectURL(blobUrl);blobUrl=null;}
+  function clearMedia(){preview=null;editCanvas.hidden=true;tools.classList.remove('editing');img.removeAttribute('src');if(blobUrl)URL.revokeObjectURL(blobUrl);blobUrl=null;}
   function close(){sequence++;clearInterval(timer);timer=null;modal.hidden=true;clearMedia();preview=null;form.reset();busy=false;focusBefore?.focus();}
   function showModal(){focusBefore=document.activeElement;modal.hidden=false;modal.querySelector('[data-action="close"]').focus();}
+  function circle(label,ring,child,fn){
+    const b=button('',fn);b.className='story-circle';b.setAttribute('aria-label',label);
+    const r=document.createElement('span');r.className='story-ring'+(ring?'':' add');r.append(child);
+    const l=document.createElement('span');l.className='story-label';l.textContent=label;b.append(r,l);return b;
+  }
   function paint(){
-    strip.replaceChildren(button('＋ يومياتي',()=>choose()));
     const grouped=new Map();for(const s of feed.filter(alive)){if(s.owner!==uid && (!contacts[s.owner]||isBlocked(s.owner)))continue;if(!grouped.has(s.owner))grouped.set(s.owner,[]);grouped.get(s.owner).push(s);}
-    for(const [owner,items]of grouped){const b=button('',()=>{queue=items;position=0;showModal();view();});b.className='story-circle';b.setAttribute('aria-label',owner===uid?'يومياتي':nameOf(owner));b.append(avatar(owner,'sm'));const label=document.createElement('span');label.textContent=owner===uid?'يومياتي':nameOf(owner);b.append(label);strip.append(b);}
+    const title=document.createElement('h2');title.className='story-title';title.textContent='ستوري';
+    const row=document.createElement('div');row.className='story-circles';
+    const plus=document.createElement('span');plus.className='story-plus';plus.textContent='+';plus.setAttribute('aria-hidden','true');
+    row.append(circle('إضافة ستوري',false,plus,()=>choose()));
+    const owners=[...grouped.keys()].sort((x,y)=>(y===uid)-(x===uid));
+    for(const owner of owners){const items=grouped.get(owner);row.append(circle(owner===uid?'أنت':nameOf(owner),true,avatar(owner,'sm'),()=>{queue=items;position=0;showModal();view();}));}
+    strip.replaceChildren(title,row);
   }
   async function refresh(force=false){
     if(!auth?.currentUser||!me)return;
     if(account!==uid){account=uid;feed=[];lastFetch=0;close();}
     paint();if(loading||(!force&&Date.now()-lastFetch<30000))return;loading=true;lastFetch=Date.now();const current=uid;
     try{const data=await api();if(uid!==current)return;offset=data.serverNow-Date.now();feed=data.stories;paint();}
-    catch(e){if(!feed.length){const retry=button('اليوميات غير متاحة · إعادة المحاولة',()=>refresh(true));retry.className='story-retry';strip.append(retry);}}
+    catch(e){if(!feed.length){const retry=button('الستوري غير متاح · إعادة المحاولة',()=>refresh(true));retry.className='story-retry';strip.append(retry);}}
     finally{loading=false;}
   }
   function choose(){
-    showModal();clearMedia();form.hidden=true;tools.replaceChildren();status.textContent='صورة للأصدقاء فقط · تختفي بعد 24 ساعة';modal.querySelector('.story-name').textContent='إضافة يومية';
+    showModal();clearMedia();form.hidden=true;tools.replaceChildren();status.textContent='صورة للأصدقاء فقط · تختفي بعد 24 ساعة';modal.querySelector('.story-name').textContent='إضافة ستوري';
     modal.querySelector('.story-progress').replaceChildren();modal.querySelectorAll('.story-prev,.story-next').forEach(b=>b.hidden=true);
     tools.append(button('التقاط صورة',()=>{picker.setAttribute('capture','environment');picker.click();}),button('اختيار من الألبوم',()=>{picker.removeAttribute('capture');picker.click();}));
   }
-  async function compress(file){
+  async function load(file){
     if(!file.type.startsWith('image/')||file.size>20*1024*1024)throw new Error('اختر صورة أصغر من 20 ميجابايت');
     const url=URL.createObjectURL(file);
     try{
       const image=new Image();image.src=url;await image.decode();
       if(image.naturalWidth*image.naturalHeight>25000000)throw new Error('أبعاد الصورة كبيرة جدًا');
       const scale=Math.min(1,1920/Math.max(image.naturalWidth,image.naturalHeight)),canvas=document.createElement('canvas');canvas.width=Math.round(image.naturalWidth*scale);canvas.height=Math.round(image.naturalHeight*scale);canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height);
-      const data=canvas.toDataURL('image/jpeg',.85);if(data.length>5*1024*1024)throw new Error('الصورة كبيرة، اختر صورة أصغر');return data;
+      return canvas;
     }finally{URL.revokeObjectURL(url);}
+  }
+  /* تحرير الصورة: فلاتر بالبكسل (تعمل على كل الأجهزة) + نص قابل للسحب */
+  const FILTERS=[['none','أصلي'],['bw','أبيض وأسود'],['sepia','سيبيا'],['vivid','حيوي'],['warm','دافئ'],['cool','بارد'],['fade','باهت'],['drama','درامي']];
+  const PARAMS={none:{},bw:{s:0},sepia:{sepia:1},vivid:{s:1.45,c:1.1},warm:{m:[1.08,1,.9],b:6},cool:{m:[.9,1,1.1],b:4},fade:{c:.8,b:28,s:.85},drama:{c:1.35,s:.8,b:-12}};
+  const COLORS=['#ffffff','#111111','#ffd400','#ff4d4d','#3ec9ff','#7dff7a'];
+  function grade(canvas,filter,bright){
+    if(filter==='none'&&!bright)return;
+    const p=PARAMS[filter]||{},ctx=canvas.getContext('2d'),d=ctx.getImageData(0,0,canvas.width,canvas.height),a=d.data;
+    const s=p.s??1,c=p.c??1,b=(p.b||0)+bright,m=p.m||[1,1,1];
+    for(let i=0;i<a.length;i+=4){
+      let r=a[i],g=a[i+1],bl=a[i+2];
+      if(p.sepia){const R=.393*r+.769*g+.189*bl,G=.349*r+.686*g+.168*bl,B=.272*r+.534*g+.131*bl;r=R;g=G;bl=B;}
+      else if(s!==1){const l=.299*r+.587*g+.114*bl;r=l+(r-l)*s;g=l+(g-l)*s;bl=l+(bl-l)*s;}
+      if(c!==1){r=(r-128)*c+128;g=(g-128)*c+128;bl=(bl-128)*c+128;}
+      a[i]=r*m[0]+b;a[i+1]=g*m[1]+b;a[i+2]=bl*m[2]+b;
+    }
+    ctx.putImageData(d,0,0);
+  }
+  function drawText(ctx,W,H,st){
+    const raw=st.text.trim();if(!raw)return;
+    const px=Math.round(W*st.size/100),family=getComputedStyle(document.body).fontFamily||'sans-serif';
+    ctx.save();ctx.font='700 '+px+'px '+family;ctx.textAlign='center';ctx.textBaseline='middle';ctx.direction=/[؀-ۿ]/.test(raw)?'rtl':'ltr';
+    const maxW=W*.86,lines=[];
+    for(const para of raw.split(/\r?\n/)){let line='';for(const word of para.split(/\s+/).filter(Boolean)){const next=line?line+' '+word:word;if(line&&ctx.measureText(next).width>maxW){lines.push(line);line=word;}else line=next;}lines.push(line);}
+    const lh=px*1.35,top=st.y*H-lines.length*lh/2,cx=st.x*W;
+    if(st.bg){
+      let w=0;for(const l of lines)w=Math.max(w,Math.min(maxW,ctx.measureText(l).width));
+      const pad=px*.45,x=cx-w/2-pad,y=top-pad*.4,bw=w+pad*2,bh=lines.length*lh+pad*.8,r=Math.min(px*.5,bh/2);
+      ctx.fillStyle='rgba(0,0,0,.58)';ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+bw,y,x+bw,y+bh,r);ctx.arcTo(x+bw,y+bh,x,y+bh,r);ctx.arcTo(x,y+bh,x,y,r);ctx.arcTo(x,y,x+bw,y,r);ctx.closePath();ctx.fill();
+    }
+    lines.forEach((l,i)=>{const y=top+lh*(i+.5);if(!st.bg){ctx.lineJoin='round';ctx.lineWidth=px*.14;ctx.strokeStyle='rgba(0,0,0,.65)';ctx.strokeText(l,cx,y);}ctx.fillStyle=st.color;ctx.fillText(l,cx,y);});
+    ctx.restore();
+  }
+  function draw(){
+    const st=preview;if(!st)return;const g=st.graded;
+    if(editCanvas.width!==g.width||editCanvas.height!==g.height){editCanvas.width=g.width;editCanvas.height=g.height;}
+    const ctx=editCanvas.getContext('2d');ctx.drawImage(g,0,0);drawText(ctx,g.width,g.height,st);
+  }
+  function regrade(){
+    const st=preview;if(!st)return;const w=Math.min(st.base.width,900),g=st.graded;
+    g.width=w;g.height=Math.round(w*st.base.height/st.base.width);g.getContext('2d').drawImage(st.base,0,0,g.width,g.height);grade(g,st.filter,st.bright);draw();
+  }
+  function exportImage(st){
+    const c=document.createElement('canvas');c.width=st.base.width;c.height=st.base.height;const ctx=c.getContext('2d');ctx.drawImage(st.base,0,0);grade(c,st.filter,st.bright);drawText(ctx,c.width,c.height,st);
+    const data=c.toDataURL('image/jpeg',.85);if(data.length>5*1024*1024)throw new Error('الصورة كبيرة، اختر صورة أصغر');return data;
+  }
+  let dragging=false;
+  const place=e=>{if(!preview)return;const r=editCanvas.getBoundingClientRect();preview.x=Math.min(.92,Math.max(.08,(e.clientX-r.left)/r.width));preview.y=Math.min(.95,Math.max(.05,(e.clientY-r.top)/r.height));draw();};
+  editCanvas.addEventListener('pointerdown',e=>{if(!preview||!preview.text.trim())return;dragging=true;try{editCanvas.setPointerCapture(e.pointerId);}catch{}place(e);});
+  editCanvas.addEventListener('pointermove',e=>{if(dragging)place(e);});
+  for(const type of['pointerup','pointercancel'])editCanvas.addEventListener(type,()=>{dragging=false;});
+  function editor(){
+    const box=document.createElement('div');box.className='story-editor';
+    const filters=document.createElement('div');filters.className='story-filters';filters.setAttribute('aria-label','الفلاتر');
+    const mark=()=>filters.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.filter===preview.filter));
+    for(const [key,label]of FILTERS){const b=button(label,()=>{preview.filter=key;regrade();mark();});b.dataset.filter=key;filters.append(b);}
+    mark();
+    const text=document.createElement('textarea');text.rows=2;text.maxLength=200;text.placeholder='اكتب أو الصق نصًا على الصورة…';text.setAttribute('aria-label','نص على الصورة');
+    text.oninput=()=>{preview.text=text.value;status.textContent=text.value.trim()?'اسحب النص لتحريكه':'';draw();};
+    const colors=document.createElement('div');colors.className='story-colors';colors.setAttribute('aria-label','لون النص');
+    const paintColors=()=>colors.querySelectorAll('.story-swatch').forEach(b=>b.classList.toggle('on',b.dataset.color===preview.color));
+    for(const color of COLORS){const b=button('',()=>{preview.color=color;paintColors();draw();});b.className='story-swatch';b.dataset.color=color;b.style.background=color;b.setAttribute('aria-label','لون '+color);colors.append(b);}
+    paintColors();
+    const smaller=button('A−',()=>{preview.size=Math.max(3,preview.size-1);draw();}),bigger=button('A+',()=>{preview.size=Math.min(16,preview.size+1);draw();});
+    smaller.setAttribute('aria-label','تصغير النص');bigger.setAttribute('aria-label','تكبير النص');
+    const bg=button('خلفية',()=>{preview.bg=!preview.bg;bg.classList.toggle('on',preview.bg);draw();});bg.setAttribute('aria-label','خلفية خلف النص');
+    colors.append(smaller,bigger,bg);
+    const light=document.createElement('label');light.className='story-light';light.append('السطوع ');
+    const range=document.createElement('input');range.type='range';range.min='-60';range.max='60';range.value='0';range.setAttribute('aria-label','السطوع');range.oninput=()=>{preview.bright=Number(range.value);regrade();};light.append(range);
+    const actions=document.createElement('div');actions.className='story-actions';actions.append(button('نشر الستوري',publish),button('اختيار صورة أخرى',choose));
+    box.append(filters,text,colors,light,actions);return box;
+  }
+  function startEdit(base){
+    preview={base,filter:'none',bright:0,text:'',color:'#ffffff',size:7,x:.5,y:.5,bg:false,graded:document.createElement('canvas')};
+    img.removeAttribute('src');editCanvas.hidden=false;regrade();tools.classList.add('editing');tools.replaceChildren(editor());
+    status.textContent='';
   }
   picker.onchange=async()=>{
     const file=picker.files[0];picker.value='';if(!file)return;const seq=sequence;
-    try{const data=await compress(file);if(seq!==sequence||modal.hidden)return;preview=data;img.src=data;status.textContent='جاهزة للنشر · للأصدقاء فقط';tools.replaceChildren(button('نشر اليومية',publish),button('اختيار صورة أخرى',choose));}catch(e){message(e);}
+    try{const base=await load(file);if(seq!==sequence||modal.hidden)return;startEdit(base);}catch(e){message(e);}
   };
-  async function publish(){if(busy||!preview)return;busy=true;status.textContent='جاري النشر…';try{await api('',{method:'POST',body:JSON.stringify({image:preview})});close();toast('نُشرت يوميتك للأصدقاء');await refresh(true);}catch(e){message(e);status.textContent='تعذّر النشر، حاول مجددًا';}finally{busy=false;}}
+  async function publish(){if(busy||!preview)return;busy=true;status.textContent='جاري النشر…';try{await api('',{method:'POST',body:JSON.stringify({image:exportImage(preview)})});close();toast('نُشر الستوري للأصدقاء');await refresh(true);}catch(e){message(e);status.textContent='تعذّر النشر، حاول مجددًا';}finally{busy=false;}}
   function move(n){position+=n;if(position<0)position=0;if(position>=queue.length){close();return;}view();}
   async function view(){
     clearInterval(timer);clearMedia();preview=null;form.reset();tools.replaceChildren();const s=queue[position],seq=++sequence;if(!alive(s)){move(1);return;}
     form.hidden=s.owner===uid;status.textContent='جاري التحميل…';modal.querySelector('.story-name').textContent=nameOf(s.owner);
     modal.querySelectorAll('.story-prev,.story-next').forEach(b=>b.hidden=false);
     const progress=modal.querySelector('.story-progress');progress.replaceChildren(...queue.map((_,i)=>{const p=document.createElement('progress');p.max=1;p.value=i<position?1:0;return p;}));
-    if(s.owner===uid){tools.append(button('المشاهدات',async()=>{try{const data=await api('/'+s.id+'/views');if(seq!==sequence)return;status.textContent=data.viewers.length?data.viewers.map(v=>nameOf(v.uid)).join('، '):'لا توجد مشاهدات بعد';}catch(e){message(e);}}),button('حذف اليومية',async()=>{if(!confirm('حذف هذه اليومية؟'))return;try{await api('/'+s.id,{method:'DELETE'});close();await refresh(true);}catch(e){message(e);}}));}
-    else tools.append(button('إبلاغ',async()=>{const reason=prompt('سبب الإبلاغ عن اليومية');if(!reason)return;try{await api('/'+s.id+'/report',{method:'POST',body:JSON.stringify({reason})});toast('تم إرسال البلاغ');}catch(e){message(e);}}));
+    if(s.owner===uid){tools.append(button('المشاهدات',async()=>{try{const data=await api('/'+s.id+'/views');if(seq!==sequence)return;status.textContent=data.viewers.length?data.viewers.map(v=>nameOf(v.uid)).join('، '):'لا توجد مشاهدات بعد';}catch(e){message(e);}}),button('حذف الستوري',async()=>{if(!confirm('حذف هذا الستوري؟'))return;try{await api('/'+s.id,{method:'DELETE'});close();await refresh(true);}catch(e){message(e);}}));}
+    else tools.append(button('إبلاغ',async()=>{const reason=prompt('سبب الإبلاغ عن الستوري');if(!reason)return;try{await api('/'+s.id+'/report',{method:'POST',body:JSON.stringify({reason})});toast('تم إرسال البلاغ');}catch(e){message(e);}}));
     try{
       const blob=await api('/'+s.id+'/media',{media:true});if(seq!==sequence||modal.hidden||!alive(s))return;
       blobUrl=URL.createObjectURL(blob);img.src=blobUrl;status.textContent='';deadline=Date.now()+6000;
@@ -100,10 +187,10 @@ window.BPBStories = (() => {
   auth?.onAuthStateChanged(()=>{feed=[];lastFetch=0;account='';close();strip.replaceChildren();});
   setInterval(()=>{if(!document.hidden){paint();if(!$('s-home').hidden)refresh();}},15000);
   function renderReply(m,target){
-    const quote=button('رد على يومية',async()=>{if(!alive(m.story)){quote.textContent='انتهت اليومية';return;}queue=[m.story];position=0;showModal();view();});
-    quote.className='story-quote';if(!alive(m.story))quote.textContent='انتهت اليومية';target.append(quote);
+    const quote=button('رد على ستوري',async()=>{if(!alive(m.story)){quote.textContent='انتهى الستوري';return;}queue=[m.story];position=0;showModal();view();});
+    quote.className='story-quote';if(!alive(m.story))quote.textContent='انتهى الستوري';target.append(quote);
     if(m.text)target.append(document.createTextNode(m.text));
-    if(typeof m.image==='string'&&m.image.length<700000&&/^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/.test(m.image)){const photo=document.createElement('img');photo.className='story-reply-image';photo.alt='صورة رد على اليومية';photo.src=m.image;target.append(photo);}
+    if(typeof m.image==='string'&&m.image.length<700000&&/^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/.test(m.image)){const photo=document.createElement('img');photo.className='story-reply-image';photo.alt='صورة رد على الستوري';photo.src=m.image;target.append(photo);}
   }
   return {refresh,renderReply};
 })();
