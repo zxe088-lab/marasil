@@ -524,3 +524,18 @@ form.composer .composer-write input{flex:1;width:0;min-width:0;border:0;backgrou
 .se-busy{position:absolute;inset:0;z-index:9;display:grid;place-items:center;background:rgba(0,0,0,.6);font-size:18px}
 .se-busy[hidden]{display:none}
 .se.drawing .se-panel,.se.cropping .se-panel{max-height:30%}
+
+@font-face{font-family:'Story Noto Kufi';src:url('fonts/story-noto-kufi-arabic.woff2') format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:'Story Noto Naskh';src:url('fonts/story-noto-naskh-arabic.woff2') format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:'Story IBM Plex';src:url('fonts/story-ibm-plex-sans-arabic.woff2') format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:'Story Readex';src:url('fonts/story-readex-pro.woff2') format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:'Story Lemonada';src:url('fonts/story-lemonada.woff2') format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:'Story Jomhuria';src:url('fonts/story-jomhuria.woff2') format('woff2');font-weight:400;font-display:swap}
+@font-face{font-family:'Story Mada';src:url('fonts/story-mada.woff2') format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:'Story Scheherazade';src:url('fonts/story-scheherazade-new.woff2') format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:'Story Markazi';src:url('fonts/story-markazi-text.woff2') format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:'Story Lateef';src:url('fonts/story-lateef.woff2') format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:'Story Vibes';src:url('fonts/story-vibes.woff2') format('woff2');font-weight:400;font-display:swap}
+@font-face{font-family:'Story Baloo';src:url('fonts/story-baloo-bhaijaan-2.woff2') format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:'Story Harmattan';src:url('fonts/story-harmattan.woff2') format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:'Story Mirza';src:url('fonts/story-mirza.woff2') format('woff2');font-weight:700;font-display:swap}

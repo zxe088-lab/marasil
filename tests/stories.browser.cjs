@@ -55,14 +55,14 @@ const {chromium}=require('playwright');
  // text tool: type, 12 Arabic fonts, colors, background, size
  await tool('نص').click();
  await page.getByLabel('نص على الصورة').fill('صباح الخير');
- assert.equal(await page.locator('.se-fonts button').count(),12);
- for(const name of ['أميري','كوفي','رقعة','لالزار','القاهرة'])await tool(name).click();
+ assert.equal(await page.locator('.se-fonts button').count(),26);
+ for(const name of ['أميري','كوفي','رقعة','لالزار','القاهرة','نوتو كوفي','شهرزاد','جمهورية','فايبز'])await tool(name).click();
  await tool('خلفية خلف النص').click();
  await tool('تكبير النص').click();
  await page.locator('.se-swatch').nth(2).click();
  // adjust tool: filters and sliders
  await tool('تعديل وفلاتر').click();
- for(const name of ['سيبيا','أبيض وأسود','درامي','حيوي'])await tool(name).click();
+ for(const name of ['سيبيا','أبيض وأسود','درامي','نوار','قديم','ذهبي','غروب','وردي','نعناعي','ليلي','سينمائي','ملوّن','ناعم','حيوي'])await tool(name).click();
  for(const label of ['السطوع','التباين','التشبّع'])await page.getByLabel(label).evaluate(el=>{el.value='25';el.dispatchEvent(new Event('input',{bubbles:true}));});
  // draw tool: finger stroke, undo, stroke again
  await tool('رسم').click();
