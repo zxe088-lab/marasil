@@ -18,4 +18,21 @@ function imageBytes(data) {
   if (!(jpeg || png || webp)) fail(400, 'محتوى الصورة غير صالح');
   return bytes;
 }
-module.exports = {DAY, fail, active, canRead, imageBytes};
+const AUDIO_TYPES = new Set(['audio/mp4','audio/x-m4a','audio/m4a','audio/aac','audio/mpeg','audio/mp3','audio/webm','audio/ogg','audio/wav','audio/x-wav']);
+// Optional sound for a story: validated by declared type, size and file signature.
+function audioBytes(data) {
+  if (typeof data !== 'string') fail(400, 'ملف الصوت غير صالح');
+  if (data.length > 4.3 * 1024 * 1024) fail(413, 'ملف الصوت أكبر من الحد المسموح');
+  const match = /^data:(audio\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/]+={0,2})$/.exec(data);
+  if (!match || !AUDIO_TYPES.has(match[1])) fail(400, 'نوع الصوت غير مدعوم');
+  const bytes = Buffer.from(match[2], 'base64');
+  if (!bytes.length || bytes.length > 3 * 1024 * 1024) fail(413, 'ملف الصوت أكبر من الحد المسموح');
+  const mp4 = bytes.subarray(4, 8).toString() === 'ftyp';
+  const mp3 = bytes.subarray(0, 3).toString() === 'ID3' || (bytes[0] === 255 && (bytes[1] & 224) === 224);
+  const webm = bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3;
+  const ogg = bytes.subarray(0, 4).toString() === 'OggS';
+  const wav = bytes.subarray(0, 4).toString() === 'RIFF' && bytes.subarray(8, 12).toString() === 'WAVE';
+  if (!(mp4 || mp3 || webm || ogg || wav)) fail(400, 'محتوى الصوت غير صالح');
+  return {bytes, type: match[1]};
+}
+module.exports = {DAY, fail, active, canRead, imageBytes, audioBytes};

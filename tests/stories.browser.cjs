@@ -6,7 +6,7 @@ const {chromium}=require('playwright');
  try{
  const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.setContent('<meta name="viewport" content="width=device-width, initial-scale=1"><div id="s-home"><div class="classic-menu"></div></div><div id="quote"></div>');
+ await page.setContent('<meta name="viewport" content="width=device-width, initial-scale=1"><div id="s-home"><div class="classic-menu"><button class="classic-category">التحديثات</button><div id="t-updates"></div></div></div><div id="quote"></div>');
  await page.addStyleTag({content:fs.readFileSync('style.css','utf8')});
  await page.evaluate(()=>{
  window.uid='bob';window.me={name:'Bob'};window.contacts={alice:{}};
@@ -22,8 +22,10 @@ const {chromium}=require('playwright');
  return new Response(JSON.stringify({serverNow:now,stories:[{id:'story1',owner:'alice',createdAt:now-1000,expiresAt:now+86400000}]}));
  };
  });
+ await page.addScriptTag({content:fs.readFileSync('story-editor.js','utf8')});
  await page.addScriptTag({content:fs.readFileSync('stories.js','utf8')});
  await page.evaluate(()=>BPBStories.refresh(true));
+ assert.equal(await page.locator('#t-updates + .stories-strip').count(),1);
  await page.locator('.story-category').click();
  await page.getByRole('button',{name:'صديق الاختبار',exact:true}).click();
  // long press freezes the story and hides the controls; releasing resumes without navigating
@@ -48,17 +50,50 @@ const {chromium}=require('playwright');
  // A real decodable PNG exercises canvas resize, preview and publish.
  const png=Buffer.from(await page.evaluate(()=>{const c=document.createElement('canvas');c.width=600;c.height=900;const ctx=c.getContext('2d');ctx.fillStyle='#236989';ctx.fillRect(0,0,600,900);ctx.fillStyle='#fff';ctx.font='40px sans-serif';ctx.fillText('BPB Stories',160,450);return c.toDataURL('image/png').split(',')[1];}),'base64');
  await page.locator('input[type=file]').first().setInputFiles({name:'test.png',mimeType:'image/png',buffer:png});
- await page.getByRole('button',{name:'نشر الستوري',exact:true}).waitFor();
+ await page.locator('.se').waitFor();
+ const tool=name=>page.getByRole('button',{name,exact:true});
+ // text tool: type, 12 Arabic fonts, colors, background, size
+ await tool('نص').click();
  await page.getByLabel('نص على الصورة').fill('صباح الخير');
- assert.equal(await page.locator('.story-fonts button').count(),12);
- for(const name of ['أميري','كوفي','رقعة','لالزار','القاهرة'])await page.getByRole('button',{name,exact:true}).click();
- for(const name of ['سيبيا','أبيض وأسود','درامي','أصلي'])await page.getByRole('button',{name,exact:true}).click();
- await page.getByRole('button',{name:'خلفية خلف النص',exact:true}).click();
- await page.locator('.story-light input').evaluate(el=>{el.value='40';el.dispatchEvent(new Event('input',{bubbles:true}));});
- await page.locator('canvas.story-edit').click({position:{x:60,y:80}});
+ assert.equal(await page.locator('.se-fonts button').count(),12);
+ for(const name of ['أميري','كوفي','رقعة','لالزار','القاهرة'])await tool(name).click();
+ await tool('خلفية خلف النص').click();
+ await tool('تكبير النص').click();
+ await page.locator('.se-swatch').nth(2).click();
+ // adjust tool: filters and sliders
+ await tool('تعديل وفلاتر').click();
+ for(const name of ['سيبيا','أبيض وأسود','درامي','حيوي'])await tool(name).click();
+ for(const label of ['السطوع','التباين','التشبّع'])await page.getByLabel(label).evaluate(el=>{el.value='25';el.dispatchEvent(new Event('input',{bubbles:true}));});
+ // draw tool: finger stroke, undo, stroke again
+ await tool('رسم').click();
+ const box=await page.locator('.se-canvas').boundingBox();
+ const stroke=async()=>{await page.mouse.move(box.x+box.width*.25,box.y+box.height*.7);await page.mouse.down();for(let i=1;i<=8;i++)await page.mouse.move(box.x+box.width*(.25+i*.06),box.y+box.height*(.7+Math.sin(i)*.04));await page.mouse.up();};
+ await stroke();await tool('تراجع').click();await stroke();
+ // stickers: emoji + location filters
+ await tool('ملصقات').click();
+ await tool('ملصق 🔥').click();await tool('A+').click();
+ await tool('فلاتر الموقع').click();
+ await tool('🕒 الوقت').click();
+ await page.getByLabel('اسم مكان مخصص').fill('الرياض');await tool('إضافة').click();
+ await page.evaluate(()=>{navigator.geolocation.getCurrentPosition=ok=>ok({coords:{latitude:24.7,longitude:46.7}});const f=window.fetch;window.fetch=async(url,o)=>/bigdatacloud/.test(url)?new Response(JSON.stringify({city:'الرياض',countryName:'السعودية'})):/open-meteo/.test(url)?new Response(JSON.stringify({current:{temperature_2m:31.4}})):f(url,o);});
+ await tool('📍 موقعي').click();await tool('🌡️ الحرارة').click();
+ await page.waitForFunction(()=>window.BPBStoryEditor&&true);
+ // crop / rotate
+ await tool('قص وتدوير').click();
+ await page.getByLabel('التقريب').evaluate(el=>{el.value='160';el.dispatchEvent(new Event('input',{bubbles:true}));});
+ await tool('تدوير ٩٠°').click();await tool('تدوير ٩٠°').click();await tool('تدوير ٩٠°').click();await tool('تدوير ٩٠°').click();
+ // sound: pick an audio file
+ await tool('موسيقى وصوت').click();
+ const m4a=Buffer.concat([Buffer.from([0,0,0,24]),Buffer.from('ftypM4A '),Buffer.alloc(200)]);
+ await page.locator('.se-panel input[type=file]').setInputFiles({name:'نغمة.m4a',mimeType:'audio/mp4',buffer:m4a});
+ await page.getByRole('button',{name:'إزالة الصوت',exact:true}).waitFor();
+ await tool('تعديل وفلاتر').click();
  fs.mkdirSync('browser-results',{recursive:true});await page.screenshot({path:'browser-results/stories-preview.png'});
- await page.getByRole('button',{name:'نشر الستوري',exact:true}).click();
- const sent=await page.evaluate(()=>JSON.parse(window.calls.filter(c=>c.options&&c.options.method==='POST'&&!/\/(reply|views|report)$/.test(c.url)).pop().options.body).image);
+ assert.equal(await page.evaluate(()=>window.lastToast&&/تعذّر تطبيق/.test(window.lastToast)),false);
+ await tool('نشر الستوري').click();
+ const body=await page.evaluate(()=>JSON.parse(window.calls.filter(c=>c.options&&c.options.method==='POST'&&!/\/(reply|views|report)$/.test(c.url)).pop().options.body));
+ const sent=body.image;
+ assert.match(body.audio,/^data:audio\/mp4;base64,/);
  assert.match(sent,/^data:image\/jpeg;base64,/);
  const dims=await page.evaluate(src=>new Promise(r=>{const i=new Image();i.onload=()=>r([i.naturalWidth,i.naturalHeight]);i.src=src;}),sent);
  assert.deepEqual(dims,[1080,1920]);

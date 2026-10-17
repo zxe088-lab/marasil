@@ -23,6 +23,7 @@ const {chromium}=require('playwright');
  return new Response(JSON.stringify({serverNow:now,stories:[{id:'story1',owner:'alice',createdAt:now-1000,expiresAt:now+86400000}]}));
  };
  });
+ await page.addScriptTag({content:fs.readFileSync('story-editor.js','utf8')});
  await page.addScriptTag({content:fs.readFileSync('stories.js','utf8')});
  await page.evaluate(()=>BPBStories.refresh(true));
  await page.locator('.story-category').click();
@@ -45,7 +46,7 @@ const {chromium}=require('playwright');
  assert.equal(await page.evaluate(()=>window.__s.getTracks().every(t=>t.readyState==='ended')),true);
  assert.equal(await page.locator('.story-cam').isVisible(),false);
  // the gallery button is available from the camera
- await page.getByRole('button',{name:'اختيار صورة أخرى',exact:true}).click();
+ await page.getByRole('button',{name:'إغلاق المحرر',exact:true}).click();
  await page.getByRole('button',{name:'الاستوديو'}).waitFor();
  await page.getByRole('button',{name:'إغلاق الستوري'}).click();
  assert.equal(await page.evaluate(()=>window.__s.getTracks().length>=0&&!document.querySelector('.story-cam video').srcObject),true);

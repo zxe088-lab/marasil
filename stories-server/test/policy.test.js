@@ -24,3 +24,10 @@ test('rejects SVG, arbitrary payloads and oversized images',()=>{
  assert.throws(()=>imageBytes('data:image/jpeg;base64,PHN2Zz4='),e=>e.status===400);
  assert.deepEqual(imageBytes('data:image/jpeg;base64,/9j/'),Buffer.from([255,216,255]));
 });
+test('sound: only allowed audio types with a matching signature and size',()=>{
+ const {audioBytes}=require('../policy');
+ const mp4='data:audio/mp4;base64,'+Buffer.from([0,0,0,24,102,116,121,112,77,52,65,32]).toString('base64');
+ assert.equal(audioBytes(mp4).type,'audio/mp4');
+ for(const data of [{},'data:audio/mp4;base64,????','data:video/mp4;base64,AAAA','data:audio/svg;base64,AAAA','data:audio/mp4;base64,'+Buffer.from('not audio at all').toString('base64')])assert.throws(()=>audioBytes(data),e=>e.status===400);
+ assert.throws(()=>audioBytes('data:audio/mp4;base64,'+'A'.repeat(4.4*1024*1024)),e=>e.status===413);
+});

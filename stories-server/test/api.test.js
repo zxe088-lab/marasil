@@ -52,3 +52,18 @@ test('photo replies store their own image rather than a story object URL',async(
  assert.equal(Object.hasOwn(m.story,'key'),false);
 });
 test('removed owner profile prevents friends reading a previously published story',async()=>{const h=harness();h.docs.delete('users/alice');assert.equal((await h.call('GET','/api/stories/story1/media')).statusCode,403);assert.equal(h.objects.length,0);});
+test('publishing with sound stores a second private object and serves it to friends only',async()=>{
+ const h=harness();h.setUser('alice');
+ const audio='data:audio/mp4;base64,'+Buffer.from([0,0,0,24,102,116,121,112,77,52,65,32]).toString('base64');
+ const res=await h.call('POST','/api/stories',{image:'data:image/jpeg;base64,/9j/',audio,audioDur:9});
+ assert.equal(res.statusCode,200);const story=JSON.parse(res.body).story;assert.equal(story.audio,true);assert.equal(story.audioDur,9);
+ const puts=h.objects.filter(o=>o.Key&&o.Body);assert.equal(puts.length,2);assert.ok(puts.some(o=>o.Key.endsWith('.audio')&&o.ContentType==='audio/mp4'));
+ const stored=h.docs.get('stories/'+story.id);stored.state='ready';
+ h.setUser('bob');assert.equal((await h.call('GET','/api/stories/'+story.id+'/audio')).statusCode,200);
+ h.docs.delete('users/alice/contacts/bob');assert.equal((await h.call('GET','/api/stories/'+story.id+'/audio')).statusCode,403);
+});
+test('bad sound is rejected and stories without sound have no audio endpoint',async()=>{
+ const h=harness();h.setUser('alice');
+ assert.equal((await h.call('POST','/api/stories',{image:'data:image/jpeg;base64,/9j/',audio:'data:audio/mp4;base64,AAAA'})).statusCode,400);
+ assert.equal((await h.call('GET','/api/stories/story1/audio')).statusCode,404);
+});

@@ -43,7 +43,7 @@ jobs:
           [ "$GITHUB_REF_NAME" = "fix/ios-keyboard-viewport" ] || { echo "Internal test build requires fix branch"; exit 1; }
           node --test tests/viewport.test.cjs
           rm -rf www && mkdir -p www
-          cp index.html app.js stories.js style.css firebase-config.js manifest.json icon-192.png icon-512.png www/
+          cp index.html app.js stories.js story-editor.js style.css firebase-config.js manifest.json icon-192.png icon-512.png www/
           cp blackberry-48.png www/
           for f in privacy.html terms.html; do [ -f "$f" ] && cp "$f" www/; done
           cp -R fonts www/fonts
@@ -90,6 +90,7 @@ jobs:
           /usr/libexec/PlistBuddy -c "Add :NSMicrophoneUsageDescription string نحتاج المايك لتسجيل رسالة صوتية تختار إرسالها" "$PLIST" || true
           /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string نحتاج الكاميرا لالتقاط صورة تُعرض مرة واحدة" "$PLIST" || true
           /usr/libexec/PlistBuddy -c "Add :NSPhotoLibraryUsageDescription string اختر صورة لإرسالها لمرة واحدة" "$PLIST" || true
+          /usr/libexec/PlistBuddy -c "Add :NSLocationWhenInUseUsageDescription string نستخدم موقعك لإضافة اسم المكان على الستوري عندما تختار ذلك" "$PLIST" || true
 
       - name: Push notifications
         run: |

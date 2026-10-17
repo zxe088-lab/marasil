@@ -488,3 +488,39 @@ form.composer .composer-write input{flex:1;width:0;min-width:0;border:0;backgrou
 .story-modal.camera header{position:absolute;top:calc(env(safe-area-inset-top) + 16px);left:8px;right:8px;z-index:3}
 .story-modal.camera header button{background:transparent;border:0;font-size:30px;line-height:1}
 .story-modal.camera::before{content:'';position:absolute;top:0;left:0;right:0;height:130px;z-index:2;pointer-events:none;background:linear-gradient(rgba(0,0,0,.5),transparent)}
+
+/* محرر الستوري بأسلوب سناب شات */
+.story-modal .se{position:absolute;inset:0;z-index:20;background:#000;color:#fff;direction:rtl;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none}
+.story-modal .se[hidden]{display:none}
+.se-stage{position:absolute;left:0;right:0;top:calc(env(safe-area-inset-top) + 8px);bottom:calc(env(safe-area-inset-bottom) + 78px);display:flex;align-items:center;justify-content:center;padding:0 6px}
+.se-canvas{height:100%;max-width:100%;aspect-ratio:9/16;object-fit:contain;border-radius:22px;background:#111;touch-action:none;display:block}
+.story-modal .se button{font:inherit;color:#fff;background:rgba(30,30,30,.55);border:0;border-radius:999px;min-height:40px;padding:8px 14px;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.story-modal .se .se-close{position:absolute;top:calc(env(safe-area-inset-top) + 18px);right:14px;width:42px;height:42px;min-height:42px;padding:0;display:grid;place-items:center;z-index:3}
+.se-tools{position:absolute;top:calc(env(safe-area-inset-top) + 18px);left:14px;display:flex;flex-direction:column;gap:12px;z-index:3;direction:ltr}
+.story-modal .se .se-tool{width:44px;height:44px;min-height:44px;padding:0;display:grid;place-items:center;background:rgba(30,30,30,.55)}
+.story-modal .se .se-tool.on{background:#fffc00;color:#000}
+.se-panel{position:absolute;left:8px;right:8px;bottom:calc(env(safe-area-inset-bottom) + 76px);max-height:50%;overflow-y:auto;z-index:4;background:rgba(15,15,15,.82);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);border-radius:20px;padding:10px;touch-action:pan-y}
+.se-panel[hidden]{display:none}
+.se-box{display:flex;flex-direction:column;gap:10px}
+.se-box textarea,.se-box input[type=text],.se-actions input{width:100%;box-sizing:border-box;background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:12px;padding:10px;font:inherit;font-size:16px;resize:none;-webkit-user-select:text;user-select:text}
+.se-actions input{flex:1;min-width:0}
+.se-fonts,.se-colors,.se-actions{display:flex;gap:8px;align-items:center}
+.se-fonts{overflow-x:auto;padding-bottom:2px;scrollbar-width:none}.se-fonts::-webkit-scrollbar{display:none}
+.se-actions{flex-wrap:wrap}
+.story-modal .se .se-fonts button{flex:0 0 auto;font-size:16px}
+.story-modal .se button.on{outline:2px solid #fffc00;outline-offset:1px}
+.se-colors{overflow-x:auto;scrollbar-width:none}
+.story-modal .se .se-swatch{width:32px;min-width:32px;height:32px;min-height:32px;padding:0;border-radius:50%;border:2px solid rgba(255,255,255,.7);flex:0 0 auto}
+.story-modal .se .se-swatch.on{outline:3px solid #fffc00}
+.se-row{display:flex;align-items:center;gap:10px;font-size:14px}.se-row input[type=range]{flex:1;accent-color:#fffc00}
+.se-emoji{display:grid;grid-template-columns:repeat(8,1fr);gap:2px;max-height:150px;overflow-y:auto}
+.story-modal .se .se-emoji button{background:none;-webkit-backdrop-filter:none;backdrop-filter:none;font-size:26px;padding:2px;min-height:38px;border-radius:10px}
+.se-hint{margin:0;font-size:12px;opacity:.75;text-align:center}
+.story-modal .se .se-ic{width:42px;height:42px;padding:0;display:grid;place-items:center}
+.story-modal .se .se-actions .rec{background:#e5372f}
+.se-bar{position:absolute;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom) + 12px);display:flex;justify-content:space-between;align-items:center;z-index:5;direction:ltr}
+.story-modal .se .se-save{width:52px;height:52px;padding:0;display:grid;place-items:center}
+.story-modal .se .se-post{background:#fffc00;color:#000;font-weight:700;font-size:17px;min-height:52px;padding:0 22px;display:flex;align-items:center;gap:8px;direction:rtl;-webkit-backdrop-filter:none;backdrop-filter:none}
+.se-busy{position:absolute;inset:0;z-index:9;display:grid;place-items:center;background:rgba(0,0,0,.6);font-size:18px}
+.se-busy[hidden]{display:none}
+.se.drawing .se-panel,.se.cropping .se-panel{max-height:30%}
