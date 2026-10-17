@@ -41,8 +41,17 @@ const {chromium}=require('playwright');
  const png=Buffer.from(await page.evaluate(()=>{const c=document.createElement('canvas');c.width=600;c.height=900;const ctx=c.getContext('2d');ctx.fillStyle='#236989';ctx.fillRect(0,0,600,900);ctx.fillStyle='#fff';ctx.font='40px sans-serif';ctx.fillText('BPB Stories',160,450);return c.toDataURL('image/png').split(',')[1];}),'base64');
  await page.locator('input[type=file]').first().setInputFiles({name:'test.png',mimeType:'image/png',buffer:png});
  await page.getByRole('button',{name:'نشر الستوري',exact:true}).waitFor();
+ await page.getByLabel('نص على الصورة').fill('صباح الخير');
+ for(const name of ['سيبيا','أبيض وأسود','درامي','أصلي'])await page.getByRole('button',{name,exact:true}).click();
+ await page.getByRole('button',{name:'خلفية خلف النص',exact:true}).click();
+ await page.locator('.story-light input').evaluate(el=>{el.value='40';el.dispatchEvent(new Event('input',{bubbles:true}));});
+ await page.locator('canvas.story-edit').click({position:{x:60,y:80}});
  fs.mkdirSync('browser-results',{recursive:true});await page.screenshot({path:'browser-results/stories-preview.png'});
  await page.getByRole('button',{name:'نشر الستوري',exact:true}).click();
+ const sent=await page.evaluate(()=>JSON.parse(window.calls.filter(c=>c.options&&c.options.method==='POST'&&!/\/(reply|views|report)$/.test(c.url)).pop().options.body).image);
+ assert.match(sent,/^data:image\/jpeg;base64,/);
+ const dims=await page.evaluate(src=>new Promise(r=>{const i=new Image();i.onload=()=>r([i.naturalWidth,i.naturalHeight]);i.src=src;}),sent);
+ assert.deepEqual(dims,[1080,1920]);
  await page.waitForFunction(()=>window.lastToast==='نُشر الستوري للأصدقاء');
  assert.equal(await page.locator('.story-modal').isVisible(),false);
  // Verify hard expiry removes the displayed image even while a reply input is focused.

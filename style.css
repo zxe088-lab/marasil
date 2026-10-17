@@ -450,3 +450,6 @@ form.composer .composer-write input{flex:1;width:0;min-width:0;border:0;backgrou
 .story-editor textarea{width:100%;box-sizing:border-box;background:#1d2630;color:#fff;border:1px solid #667382;border-radius:10px;padding:10px;font:inherit;font-size:16px;resize:none}
 .story-light{display:flex;align-items:center;gap:8px;font-size:14px}.story-light input{flex:1}
 .story-actions{justify-content:center}
+.story-modal{overflow:hidden}
+.story-modal:not(.viewing) .story-stage{min-height:200px}
+.story-modal:not(.viewing) .story-tools.editing{flex:0 1 auto;-webkit-overflow-scrolling:touch}

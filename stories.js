@@ -69,23 +69,26 @@ window.BPBStories = (() => {
     modal.querySelector('.story-progress').replaceChildren();modal.querySelectorAll('.story-prev,.story-next').forEach(b=>b.hidden=true);
     tools.append(button('التقاط صورة',()=>{picker.setAttribute('capture','environment');picker.click();}),button('اختيار من الألبوم',()=>{picker.removeAttribute('capture');picker.click();}));
   }
-  async function decode(file){
+  async function withImage(file,use){
     if(!file.type.startsWith('image/')||file.size>20*1024*1024)throw new Error('اختر صورة أصغر من 20 ميجابايت');
     const url=URL.createObjectURL(file);
-    try{const image=new Image();image.src=url;await image.decode();if(image.naturalWidth*image.naturalHeight>25000000)throw new Error('أبعاد الصورة كبيرة جدًا');return image;}
-    finally{URL.revokeObjectURL(url);}
+    try{
+      const image=new Image();image.src=url;await image.decode();
+      if(image.naturalWidth*image.naturalHeight>25000000)throw new Error('أبعاد الصورة كبيرة جدًا');
+      const result=use(image);image.removeAttribute('src');return result;
+    }finally{URL.revokeObjectURL(url);}
   }
   /* الستوري بحجم شاشة الآيفون كاملة (9:16): الصورة تُقصّ لتملأ الشاشة */
-  async function load(file){
-    const image=await decode(file),W=1080,H=1920,canvas=document.createElement('canvas');canvas.width=W;canvas.height=H;
+  const load=file=>withImage(file,image=>{
+    const W=1080,H=1920,canvas=document.createElement('canvas');canvas.width=W;canvas.height=H;
     const scale=Math.max(W/image.naturalWidth,H/image.naturalHeight),w=image.naturalWidth*scale,h=image.naturalHeight*scale,ctx=canvas.getContext('2d');
     ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);ctx.drawImage(image,(W-w)/2,(H-h)/2,w,h);return canvas;
-  }
-  async function compress(file){
-    const image=await decode(file),scale=Math.min(1,1920/Math.max(image.naturalWidth,image.naturalHeight)),canvas=document.createElement('canvas');
+  });
+  const compress=file=>withImage(file,image=>{
+    const scale=Math.min(1,1920/Math.max(image.naturalWidth,image.naturalHeight)),canvas=document.createElement('canvas');
     canvas.width=Math.round(image.naturalWidth*scale);canvas.height=Math.round(image.naturalHeight*scale);canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height);
     const data=canvas.toDataURL('image/jpeg',.85);if(data.length>5*1024*1024)throw new Error('الصورة كبيرة، اختر صورة أصغر');return data;
-  }
+  });
   /* تحرير الصورة: فلاتر بالبكسل (تعمل على كل الأجهزة) + نص قابل للسحب */
   const FILTERS=[['none','أصلي'],['bw','أبيض وأسود'],['sepia','سيبيا'],['vivid','حيوي'],['warm','دافئ'],['cool','بارد'],['fade','باهت'],['drama','درامي']];
   const PARAMS={none:{},bw:{s:0},sepia:{sepia:1},vivid:{s:1.45,c:1.1},warm:{m:[1.08,1,.9],b:6},cool:{m:[.9,1,1.1],b:4},fade:{c:.8,b:28,s:.85},drama:{c:1.35,s:.8,b:-12}};
@@ -118,17 +121,26 @@ window.BPBStories = (() => {
     lines.forEach((l,i)=>{const y=top+lh*(i+.5);if(!st.bg){ctx.lineJoin='round';ctx.lineWidth=px*.14;ctx.strokeStyle='rgba(0,0,0,.65)';ctx.strokeText(l,cx,y);}ctx.fillStyle=st.color;ctx.fillText(l,cx,y);});
     ctx.restore();
   }
+  let reported=false;
+  function fault(e){console.error('story editor',e);if(!reported){reported=true;toast('تعذّر تطبيق التعديل: '+((e&&e.message)||e));}}
   function draw(){
-    const st=preview;if(!st)return;const g=st.graded;
-    if(editCanvas.width!==g.width||editCanvas.height!==g.height){editCanvas.width=g.width;editCanvas.height=g.height;}
-    const ctx=editCanvas.getContext('2d');ctx.drawImage(g,0,0);drawText(ctx,g.width,g.height,st);
+    const st=preview;if(!st)return;
+    try{
+      const g=st.graded;
+      if(editCanvas.width!==g.width||editCanvas.height!==g.height){editCanvas.width=g.width;editCanvas.height=g.height;}
+      const ctx=editCanvas.getContext('2d');ctx.drawImage(g,0,0);drawText(ctx,g.width,g.height,st);
+    }catch(e){fault(e);}
   }
   function regrade(){
-    const st=preview;if(!st)return;const w=Math.min(st.base.width,720),g=st.graded;
-    g.width=w;g.height=Math.round(w*st.base.height/st.base.width);g.getContext('2d').drawImage(st.base,0,0,g.width,g.height);grade(g,st.filter,st.bright);draw();
+    const st=preview;if(!st)return;
+    try{
+      const w=Math.min(st.base.width,540),g=st.graded;
+      g.width=w;g.height=Math.round(w*st.base.height/st.base.width);g.getContext('2d',{willReadFrequently:true}).drawImage(st.base,0,0,g.width,g.height);grade(g,st.filter,st.bright);
+    }catch(e){fault(e);}
+    draw();
   }
   function exportImage(st){
-    const c=document.createElement('canvas');c.width=st.base.width;c.height=st.base.height;const ctx=c.getContext('2d');ctx.drawImage(st.base,0,0);grade(c,st.filter,st.bright);drawText(ctx,c.width,c.height,st);
+    const c=document.createElement('canvas');c.width=st.base.width;c.height=st.base.height;const ctx=c.getContext('2d',{willReadFrequently:true});ctx.drawImage(st.base,0,0);grade(c,st.filter,st.bright);drawText(ctx,c.width,c.height,st);
     const data=c.toDataURL('image/jpeg',.85);if(data.length>5*1024*1024)throw new Error('الصورة كبيرة، اختر صورة أصغر');return data;
   }
   let dragging=false;
@@ -143,6 +155,7 @@ window.BPBStories = (() => {
     for(const [key,label]of FILTERS){const b=button(label,()=>{preview.filter=key;regrade();mark();});b.dataset.filter=key;filters.append(b);}
     mark();
     const text=document.createElement('textarea');text.rows=2;text.maxLength=200;text.placeholder='اكتب أو الصق نصًا على الصورة…';text.setAttribute('aria-label','نص على الصورة');
+    text.addEventListener('focus',()=>{for(const ms of[100,350])setTimeout(()=>{modal.scrollTop=0;window.scrollTo(0,0);},ms);});
     text.oninput=()=>{preview.text=text.value;status.textContent=text.value.trim()?'اسحب النص لتحريكه':'';draw();};
     const colors=document.createElement('div');colors.className='story-colors';colors.setAttribute('aria-label','لون النص');
     const paintColors=()=>colors.querySelectorAll('.story-swatch').forEach(b=>b.classList.toggle('on',b.dataset.color===preview.color));
@@ -153,14 +166,15 @@ window.BPBStories = (() => {
     const bg=button('خلفية',()=>{preview.bg=!preview.bg;bg.classList.toggle('on',preview.bg);draw();});bg.setAttribute('aria-label','خلفية خلف النص');
     colors.append(smaller,bigger,bg);
     const light=document.createElement('label');light.className='story-light';light.append('السطوع ');
-    const range=document.createElement('input');range.type='range';range.min='-60';range.max='60';range.value='0';range.setAttribute('aria-label','السطوع');range.oninput=()=>{preview.bright=Number(range.value);regrade();};light.append(range);
+    const range=document.createElement('input');range.type='range';range.min='-60';range.max='60';range.value='0';range.setAttribute('aria-label','السطوع');let frame=0;range.oninput=()=>{if(!preview)return;preview.bright=Number(range.value);if(frame)return;frame=requestAnimationFrame(()=>{frame=0;regrade();});};light.append(range);
     const actions=document.createElement('div');actions.className='story-actions';actions.append(button('نشر الستوري',publish),button('اختيار صورة أخرى',choose));
     box.append(filters,text,colors,light,actions);return box;
   }
   function startEdit(base){
+    reported=false;
     preview={base,filter:'none',bright:0,text:'',color:'#ffffff',size:7,x:.5,y:.5,bg:false,graded:document.createElement('canvas')};
-    img.removeAttribute('src');editCanvas.hidden=false;regrade();tools.classList.add('editing');tools.replaceChildren(editor());
-    status.textContent='';
+    try{img.removeAttribute('src');editCanvas.hidden=false;regrade();tools.classList.add('editing');tools.replaceChildren(editor());status.textContent='';}
+    catch(e){console.error('story editor',e);message(e);choose();}
   }
   picker.onchange=async()=>{
     const file=picker.files[0];picker.value='';if(!file)return;const seq=sequence;
