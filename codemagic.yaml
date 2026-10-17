@@ -24,7 +24,7 @@ workflows:
           [ "$CM_BRANCH" = "fix/ios-keyboard-viewport" ] || { echo "TestFlight workflow requires fix branch"; exit 1; }
           node --test tests/viewport.test.cjs
           rm -rf www && mkdir -p www
-          cp index.html app.js style.css firebase-config.js manifest.json icon-192.png icon-512.png www/
+          cp index.html app.js stories.js style.css firebase-config.js manifest.json icon-192.png icon-512.png www/
           for f in privacy.html terms.html; do [ -f "$f" ] && cp "$f" www/; done
           mkdir -p www/sounds && cp sounds/bbm.mp3 www/sounds/
           grep -q 'data-section="pending"' www/index.html
