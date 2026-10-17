@@ -474,3 +474,17 @@ form.composer .composer-write input{flex:1;width:0;min-width:0;border:0;backgrou
 .story-modal.holding header,.story-modal.holding .story-progress,.story-modal.holding .story-reply,.story-modal.holding .story-dots{opacity:0;pointer-events:none}
 .story-modal.holding::before,.story-modal.holding::after{opacity:0}
 .story-modal.viewing header,.story-modal.viewing .story-progress,.story-modal.viewing .story-reply,.story-modal .story-dots{transition:opacity .15s}
+
+/* كاميرا الستوري (أمامية افتراضيًا) */
+.story-cam{position:absolute;inset:0;z-index:1;background:#000}.story-cam[hidden]{display:none}
+.story-cam video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.story-cam video.mirror{transform:scaleX(-1)}
+.story-cam-bar{position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom) + 22px);display:flex;align-items:center;justify-content:space-around;direction:ltr;z-index:2}
+.story-modal .story-cam-bar button{background:transparent;border:0;color:#fff;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:72px;padding:0;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+.story-modal .story-cam-bar button small{font-size:12px}
+.story-modal .story-cam-bar button[data-cam="shutter"]{width:78px;height:78px;min-height:78px;border-radius:50%;border:5px solid #fff;background:rgba(255,255,255,.18)}
+.story-modal.camera{padding:0}
+.story-modal.camera .story-progress,.story-modal.camera .story-stage,.story-modal.camera .story-tools,.story-modal.camera .story-reply{display:none}
+.story-modal.camera header{position:absolute;top:calc(env(safe-area-inset-top) + 16px);left:8px;right:8px;z-index:3}
+.story-modal.camera header button{background:transparent;border:0;font-size:30px;line-height:1}
+.story-modal.camera::before{content:'';position:absolute;top:0;left:0;right:0;height:130px;z-index:2;pointer-events:none;background:linear-gradient(rgba(0,0,0,.5),transparent)}

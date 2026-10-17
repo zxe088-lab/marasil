@@ -2,7 +2,7 @@
 'use strict';
 window.BPBStories = (() => {
   const base = window.STORIES_URL || 'https://51-254-218-100.sslip.io/api/stories';
-  let feed=[],offset=0,lastFetch=0,loading=false,account='',queue=[],position=0,sequence=0,blobUrl=null,timer=null,deadline=0,busy=false,preview=null,focusBefore=null,editCanvas=null,open=false,menuItems=[],holding=false,holdTimer=0,ignoreClick=0;
+  let feed=[],offset=0,lastFetch=0,loading=false,account='',queue=[],position=0,sequence=0,blobUrl=null,timer=null,deadline=0,busy=false,preview=null,focusBefore=null,editCanvas=null,open=false,menuItems=[],holding=false,holdTimer=0,ignoreClick=0,camStream=null,camFront=true,camToken=0;
   const now=()=>Date.now()+offset;
   const alive=s=>s && s.expiresAt>now();
   const strip=document.createElement('section');strip.className='stories-strip';strip.setAttribute('aria-label','الستوري');
@@ -11,6 +11,8 @@ window.BPBStories = (() => {
   modal.innerHTML=`<div class="story-progress" aria-hidden="true"></div><header><strong class="story-name"></strong><button type="button" data-action="close" aria-label="إغلاق الستوري">×</button></header><div class="story-stage"><img alt="صورة الستوري"><button type="button" class="story-prev" aria-label="الستوري السابقة">‹</button><button type="button" class="story-next" aria-label="الستوري التالية">›</button><p class="story-status" role="status"></p></div><div class="story-tools"></div><form class="story-reply"><input maxlength="2000" placeholder="رد خاص على الستوري…" aria-label="الرد على الستوري"><button type="button" data-action="photo">صورة</button><button type="submit">إرسال</button></form>`;
   modal.insertAdjacentHTML('beforeend','<button type="button" class="story-dots" aria-label="خيارات الستوري" hidden>⋯</button><div class="story-menu" hidden><div class="story-menu-box"></div></div>');
   document.body.append(modal);
+  modal.insertAdjacentHTML('beforeend','<div class="story-cam" hidden><video playsinline muted autoplay></video><div class="story-cam-bar"><button type="button" data-cam="gallery" aria-label="الاستوديو"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="m4 18 5-5 4 4 3-3 4 4"/></svg><small>الاستوديو</small></button><button type="button" data-cam="shutter" aria-label="التقاط صورة"></button><button type="button" data-cam="flip" aria-label="قلب الكاميرا"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9a8 8 0 0 1 14-3l2 2M20 15a8 8 0 0 1-14 3l-2-2"/><path d="M20 4v4h-4M4 20v-4h4"/></svg><small>قلب</small></button></div></div>');
+  const cam=modal.querySelector('.story-cam'),camVideo=cam.querySelector('video');
   const dots=modal.querySelector('.story-dots'),menu=modal.querySelector('.story-menu'),menuBox=menu.querySelector('.story-menu-box');
   const img=modal.querySelector('img'),status=modal.querySelector('.story-status'),tools=modal.querySelector('.story-tools'),form=modal.querySelector('form'),input=form.querySelector('input');
   editCanvas=document.createElement('canvas');editCanvas.className='story-edit';editCanvas.hidden=true;editCanvas.setAttribute('aria-label','معاينة الستوري');modal.querySelector('.story-stage').prepend(editCanvas);
@@ -35,7 +37,7 @@ window.BPBStories = (() => {
     }finally{clearTimeout(timeout);}
   }
   function clearMedia(){preview=null;editCanvas.hidden=true;tools.classList.remove('editing');img.removeAttribute('src');if(blobUrl)URL.revokeObjectURL(blobUrl);blobUrl=null;}
-  function close(){clearTimeout(holdTimer);holding=false;modal.classList.remove('holding');menu.hidden=true;dots.hidden=true;modal.classList.remove('viewing');sequence++;clearInterval(timer);timer=null;modal.hidden=true;clearMedia();preview=null;form.reset();busy=false;focusBefore?.focus();}
+  function close(){stopCamera();clearTimeout(holdTimer);holding=false;modal.classList.remove('holding');menu.hidden=true;dots.hidden=true;modal.classList.remove('viewing');sequence++;clearInterval(timer);timer=null;modal.hidden=true;clearMedia();preview=null;form.reset();busy=false;focusBefore?.focus();}
   function showModal(){focusBefore=document.activeElement;modal.hidden=false;modal.querySelector('[data-action="close"]').focus();}
   function circle(label,ring,child,fn){
     const b=button('',fn);b.className='story-circle';b.setAttribute('aria-label',label);
@@ -64,10 +66,44 @@ window.BPBStories = (() => {
     catch(e){if(!feed.length){const retry=button('الستوري غير متاح · إعادة المحاولة',()=>refresh(true));retry.className='story-retry';strip.append(retry);}}
     finally{loading=false;}
   }
+  function stopCamera(){
+    camToken++;if(camStream)camStream.getTracks().forEach(tr=>tr.stop());camStream=null;camVideo.srcObject=null;
+    modal.classList.remove('camera');cam.hidden=true;
+  }
+  /* الضغط على «إضافة ستوري» يفتح الكاميرا الأمامية مباشرة؛ الاستوديو زر جانبي، وإن تعذّرت الكاميرا تظهر الأزرار القديمة */
+  async function openCamera(){
+    const token=++camToken;
+    if(camStream){camStream.getTracks().forEach(tr=>tr.stop());camStream=null;}
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){status.textContent='الكاميرا غير متاحة، اختر من الأسفل';return;}
+    modal.classList.add('camera');cam.hidden=false;camVideo.classList.toggle('mirror',camFront);
+    try{
+      const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:camFront?'user':{ideal:'environment'},width:{ideal:1080},height:{ideal:1920}},audio:false});
+      if(token!==camToken||modal.hidden){stream.getTracks().forEach(tr=>tr.stop());return;}
+      camStream=stream;camVideo.srcObject=stream;camVideo.classList.toggle('mirror',camFront);
+      try{await camVideo.play();}catch{}
+    }catch(e){
+      if(token!==camToken)return;
+      modal.classList.remove('camera');cam.hidden=true;status.textContent='تعذّر فتح الكاميرا (تحقق من الصلاحيات) · اختر من الأسفل';
+    }
+  }
+  function snap(){
+    if(!camStream||!camVideo.videoWidth)return;
+    const W=1080,H=1920,canvas=document.createElement('canvas');canvas.width=W;canvas.height=H;const ctx=canvas.getContext('2d');
+    const vw=camVideo.videoWidth,vh=camVideo.videoHeight,scale=Math.max(W/vw,H/vh),w=vw*scale,h=vh*scale;
+    ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);
+    if(camFront){ctx.translate(W,0);ctx.scale(-1,1);}
+    ctx.drawImage(camVideo,(W-w)/2,(H-h)/2,w,h);
+    startEdit(canvas);
+  }
+  cam.querySelector('[data-cam="shutter"]').onclick=snap;
+  cam.querySelector('[data-cam="flip"]').onclick=()=>{camFront=!camFront;openCamera();};
+  cam.querySelector('[data-cam="gallery"]').onclick=()=>{picker.removeAttribute('capture');picker.click();};
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!modal.hidden&&modal.classList.contains('camera')&&(!camStream||camStream.getVideoTracks().every(tr=>tr.readyState!=='live')))openCamera();});
   function choose(){
     modal.classList.remove('viewing','holding');holding=false;dots.hidden=true;menu.hidden=true;showModal();clearMedia();form.hidden=true;tools.replaceChildren();status.textContent='صورة للأصدقاء فقط · تختفي بعد 24 ساعة';modal.querySelector('.story-name').textContent='إضافة ستوري';
     modal.querySelector('.story-progress').replaceChildren();modal.querySelectorAll('.story-prev,.story-next').forEach(b=>b.hidden=true);
-    tools.append(button('التقاط صورة',()=>{picker.setAttribute('capture','environment');picker.click();}),button('اختيار من الألبوم',()=>{picker.removeAttribute('capture');picker.click();}));
+    tools.append(button('التقاط صورة',()=>{picker.setAttribute('capture','user');picker.click();}),button('اختيار من الألبوم',()=>{picker.removeAttribute('capture');picker.click();}));
+    openCamera();
   }
   async function withImage(file,use){
     if(!file.type.startsWith('image/')||file.size>20*1024*1024)throw new Error('اختر صورة أصغر من 20 ميجابايت');
@@ -179,7 +215,7 @@ window.BPBStories = (() => {
     box.append(filters,text,fonts,colors,light,actions);return box;
   }
   function startEdit(base){
-    reported=false;
+    reported=false;stopCamera();
     ensureFont({font:1,text:''}).then(()=>draw());
     preview={base,filter:'none',bright:0,text:'',font:1,color:'#ffffff',size:7,x:.5,y:.5,bg:false,graded:document.createElement('canvas')};
     try{img.removeAttribute('src');editCanvas.hidden=false;regrade();tools.classList.add('editing');tools.replaceChildren(editor());status.textContent='';}
@@ -192,7 +228,7 @@ window.BPBStories = (() => {
   async function publish(){if(busy||!preview)return;busy=true;status.textContent='جاري النشر…';try{await ensureFont(preview);await api('',{method:'POST',body:JSON.stringify({image:exportImage(preview)})});close();toast('نُشر الستوري للأصدقاء');await refresh(true);}catch(e){message(e);status.textContent='تعذّر النشر، حاول مجددًا';}finally{busy=false;}}
   function move(n){position+=n;if(position<0)position=0;if(position>=queue.length){close();return;}view();}
   async function view(){
-    clearInterval(timer);clearMedia();preview=null;form.reset();tools.replaceChildren();menu.hidden=true;holding=false;modal.classList.remove('holding');modal.classList.add('viewing');const s=queue[position],seq=++sequence;if(!alive(s)){move(1);return;}
+    clearInterval(timer);clearMedia();preview=null;form.reset();tools.replaceChildren();menu.hidden=true;holding=false;stopCamera();modal.classList.remove('holding');modal.classList.add('viewing');const s=queue[position],seq=++sequence;if(!alive(s)){move(1);return;}
     form.hidden=s.owner===uid;status.textContent='جاري التحميل…';modal.querySelector('.story-name').textContent=nameOf(s.owner);
     modal.querySelectorAll('.story-prev,.story-next').forEach(b=>b.hidden=false);
     const progress=modal.querySelector('.story-progress');progress.replaceChildren(...queue.map((_,i)=>{const p=document.createElement('progress');p.max=1;p.value=i<position?1:0;return p;}));
