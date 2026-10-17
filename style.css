@@ -400,18 +400,43 @@ form.composer .composer-write input{flex:1;width:0;min-width:0;border:0;backgrou
 /* يوميات الأصدقاء */
 .stories-strip{display:flex;gap:14px;overflow-x:auto;padding:14px 10px;border-bottom:1px solid #b4bdc4;background:linear-gradient(#fff,#e7ebef);min-height:98px;flex-shrink:0;align-items:center}.stories-strip>button{flex-shrink:0;background:none;border:0;color:#253645;font:inherit}.story-circle{display:flex;align-items:center;flex-direction:column;gap:6px;max-width:80px}.story-circle .avatar{border:3px solid #148dca!important;border-radius:50%;padding:2px;width:54px;height:54px}.story-circle span{overflow:hidden;text-overflow:ellipsis;max-width:78px;white-space:nowrap;font-size:12px}.story-retry{font-size:12px!important;color:#6a7077!important}.story-modal{position:fixed;inset:0;z-index:10000;background:#080b10;color:#fff;display:flex;flex-direction:column;padding:env(safe-area-inset-top) 12px env(safe-area-inset-bottom);height:100dvh;box-sizing:border-box;direction:rtl}.story-modal[hidden]{display:none}.story-modal header{display:flex;align-items:center;justify-content:space-between;padding:10px}.story-modal button{font:inherit;color:#fff;background:#26313f;border:1px solid #667382;border-radius:8px;padding:10px;min-height:44px}.story-progress{display:flex;gap:4px;padding-top:8px;direction:ltr}.story-progress progress{width:0;flex:1;height:4px;accent-color:white}.story-stage{position:relative;flex:1;min-height:0;display:flex;align-items:center;justify-content:center}.story-stage img{max-height:100%;max-width:100%;object-fit:contain}.story-stage img:not([src]){display:none}.story-stage .story-prev,.story-stage .story-next{position:absolute;top:45%;background:#0007;border:0;font-size:25px}.story-prev{left:0}.story-next{right:0}.story-status{position:absolute;bottom:10px;left:10px;right:10px;text-align:center;max-height:30%;overflow:auto;background:#0009;border-radius:8px;padding:8px}.story-status:empty{display:none}.story-tools{display:flex;justify-content:center;gap:10px;padding:8px}.story-reply{display:flex;gap:6px;padding:8px 0 12px}.story-reply[hidden]{display:none}.story-reply input{min-width:0;flex:1;background:#1d2630;color:white;border:1px solid #667382;border-radius:20px;padding:10px;font:inherit;font-size:16px}.story-quote{display:block;border:0;border-inline-start:3px solid #138dce;background:#dce7ef;color:#345067;padding:7px;margin-bottom:5px;cursor:pointer}.story-reply-image{display:block;width:auto;max-width:220px;max-height:300px;border-radius:8px;margin-top:6px}
 
-/* ستوري: عنوان كبير + دوائر بحلقة بنفسجية */
-.stories-strip{display:block;padding:10px 0 2px;border:0;border-bottom:1px solid #a1b2c1;background:#fff;min-height:0;overflow:visible}
-.stories-strip .story-title{margin:0;padding:2px 16px 4px;font-size:30px;font-weight:800;color:#15181c;text-align:start}
-.story-circles{display:flex;gap:14px;overflow-x:auto;padding:6px 16px 12px;scrollbar-width:none}.story-circles::-webkit-scrollbar{display:none}
-.stories-strip .story-circle{flex:0 0 auto;width:104px;max-width:none;display:flex;flex-direction:column;align-items:center;gap:8px;background:none;border:0;padding:0;color:#15181c;font:inherit}
+/* ستوري: صف بنفس شكل أقسام القائمة، وعند الضغط على + تظهر دوائر صغيرة */
+.stories-strip{display:block;padding:0;border:0;background:none;min-height:0;overflow:visible}
+.stories-strip>.story-category{width:100%;color:#192b3b;font-size:20px;border-top:1px solid #f5f8fa;border-bottom:1px solid #a1b2c1}
+.stories-strip>.story-category:not(.selected){background:linear-gradient(#e6edf3,#bccbd8)}
+.stories-strip>.story-category.selected{color:#fff}
+.story-panel{background:#fff;border-bottom:1px solid #a1b2c1}.story-panel[hidden]{display:none}
+.story-circles{display:flex;gap:12px;overflow-x:auto;padding:10px 12px 8px;scrollbar-width:none}.story-circles::-webkit-scrollbar{display:none}
+.stories-strip .story-circle{flex:0 0 auto;width:68px;max-width:none;display:flex;flex-direction:column;align-items:center;gap:5px;background:none;border:0;padding:0;color:#15181c;font:inherit}
 .stories-strip .story-circle span{max-width:none;overflow:visible;text-overflow:clip;white-space:normal;font-size:inherit}
-.stories-strip .story-circle .story-ring{display:grid;place-items:center;width:100px;height:100px;border-radius:50%;background:linear-gradient(135deg,#9b30ff,#c13cff);padding:4px;box-sizing:border-box}
-.stories-strip .story-circle .story-ring>.avatar{width:100%!important;height:100%!important;border:3px solid #fff!important;border-radius:50%!important;padding:0!important;box-sizing:border-box;overflow:hidden}
-.stories-strip .story-circle .story-ring.add{background:#fff;border:3px dashed #9b30ff}
-.stories-strip .story-circle .story-plus{font-size:46px;line-height:1;color:#9b30ff;font-weight:300}
-.stories-strip .story-circle .story-label{max-width:104px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:15px;font-weight:600;text-align:center;line-height:1.25}
+.stories-strip .story-circle .story-ring{display:grid;place-items:center;width:62px;height:62px;border-radius:50%;background:linear-gradient(135deg,#9b30ff,#c13cff);padding:3px;box-sizing:border-box}
+.stories-strip .story-circle .story-ring>.avatar{width:100%!important;height:100%!important;border:2px solid #fff!important;border-radius:50%!important;padding:0!important;box-sizing:border-box;overflow:hidden}
+.stories-strip .story-circle .story-ring.add{background:#fff;border:2px dashed #9b30ff}
+.stories-strip .story-circle .story-plus{font-size:32px;line-height:1;color:#9b30ff;font-weight:300}
+.stories-strip .story-circle .story-label{max-width:68px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:12px;font-weight:600;text-align:center;line-height:1.25}
 .stories-strip>.story-retry{display:block;width:100%;padding:8px 16px;text-align:start;background:#f4f7fa;border-top:1px solid #a1b2c1;font-size:13px}
+/* عرض الستوري بملء الشاشة */
+.story-modal.viewing{padding:0}
+.story-modal.viewing .story-stage{position:absolute;inset:0;z-index:1;display:block}
+.story-modal.viewing .story-stage img{position:absolute;inset:0;width:100%;height:100%;max-width:none;max-height:none;object-fit:cover}
+.story-modal.viewing::before,.story-modal.viewing::after{content:'';position:absolute;left:0;right:0;z-index:2;pointer-events:none}
+.story-modal.viewing::before{top:0;height:150px;background:linear-gradient(rgba(0,0,0,.55),transparent)}
+.story-modal.viewing::after{bottom:0;height:190px;background:linear-gradient(transparent,rgba(0,0,0,.6))}
+.story-modal.viewing .story-progress{position:absolute;top:calc(env(safe-area-inset-top) + 8px);left:10px;right:10px;z-index:3;padding:0}
+.story-modal.viewing header{position:absolute;top:calc(env(safe-area-inset-top) + 16px);left:8px;right:8px;z-index:3}
+.story-modal.viewing header button{background:transparent;border:0;font-size:30px;line-height:1}
+.story-modal.viewing .story-stage .story-prev,.story-modal.viewing .story-stage .story-next{top:0;bottom:0;width:30%;height:auto;min-height:0;padding:0;background:transparent;border:0;font-size:0}
+.story-modal.viewing .story-reply{position:absolute;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom) + 8px);z-index:3;padding:0}
+.story-modal.viewing .story-reply input{background:rgba(0,0,0,.35);border-color:rgba(255,255,255,.6)}
+.story-modal.viewing .story-reply button{background:rgba(0,0,0,.4);border-color:rgba(255,255,255,.5)}
+.story-modal.viewing .story-tools{display:none}
+.story-modal.viewing .story-status{top:45%;bottom:auto}
+.story-modal .story-dots{position:absolute;left:12px;bottom:calc(env(safe-area-inset-bottom) + 72px);z-index:4;width:44px;height:44px;min-height:44px;padding:0;border:0;border-radius:50%;font-size:26px;line-height:1;background:rgba(0,0,0,.4)}
+.story-modal:not(.viewing) .story-dots,.story-modal .story-dots[hidden]{display:none}
+.story-menu{position:absolute;inset:0;z-index:10;display:flex;align-items:flex-end;background:rgba(0,0,0,.5)}.story-menu[hidden]{display:none}
+.story-menu-box{width:100%;box-sizing:border-box;background:#1c2430;border-radius:16px 16px 0 0;padding:10px 12px calc(env(safe-area-inset-bottom) + 12px);display:flex;flex-direction:column;gap:8px}
+.story-modal .story-menu-box button{background:#26313f;border:0;border-radius:12px;font-size:17px;min-height:50px}
+.story-modal .story-menu-box button.danger{color:#ff6b6b}
 .story-stage canvas.story-edit{max-width:100%;max-height:100%;touch-action:none;border-radius:6px}
 .story-stage canvas.story-edit[hidden]{display:none}
 .story-tools.editing{display:block;max-height:48%;overflow-y:auto}

@@ -2,19 +2,27 @@
 'use strict';
 window.BPBStories = (() => {
   const base = window.STORIES_URL || 'https://51-254-218-100.sslip.io/api/stories';
-  let feed=[],offset=0,lastFetch=0,loading=false,account='',queue=[],position=0,sequence=0,blobUrl=null,timer=null,deadline=0,busy=false,preview=null,focusBefore=null,editCanvas=null;
+  let feed=[],offset=0,lastFetch=0,loading=false,account='',queue=[],position=0,sequence=0,blobUrl=null,timer=null,deadline=0,busy=false,preview=null,focusBefore=null,editCanvas=null,open=false,menuItems=[];
   const now=()=>Date.now()+offset;
   const alive=s=>s && s.expiresAt>now();
   const strip=document.createElement('section');strip.className='stories-strip';strip.setAttribute('aria-label','الستوري');
   document.querySelector('#s-home .classic-menu').prepend(strip);
   const modal=document.createElement('div');modal.className='story-modal';modal.hidden=true;modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');modal.setAttribute('aria-label','الستوري');
   modal.innerHTML=`<div class="story-progress" aria-hidden="true"></div><header><strong class="story-name"></strong><button type="button" data-action="close" aria-label="إغلاق الستوري">×</button></header><div class="story-stage"><img alt="صورة الستوري"><button type="button" class="story-prev" aria-label="الستوري السابقة">‹</button><button type="button" class="story-next" aria-label="الستوري التالية">›</button><p class="story-status" role="status"></p></div><div class="story-tools"></div><form class="story-reply"><input maxlength="2000" placeholder="رد خاص على الستوري…" aria-label="الرد على الستوري"><button type="button" data-action="photo">صورة</button><button type="submit">إرسال</button></form>`;
+  modal.insertAdjacentHTML('beforeend','<button type="button" class="story-dots" aria-label="خيارات الستوري" hidden>⋯</button><div class="story-menu" hidden><div class="story-menu-box"></div></div>');
   document.body.append(modal);
+  const dots=modal.querySelector('.story-dots'),menu=modal.querySelector('.story-menu'),menuBox=menu.querySelector('.story-menu-box');
   const img=modal.querySelector('img'),status=modal.querySelector('.story-status'),tools=modal.querySelector('.story-tools'),form=modal.querySelector('form'),input=form.querySelector('input');
   editCanvas=document.createElement('canvas');editCanvas.className='story-edit';editCanvas.hidden=true;editCanvas.setAttribute('aria-label','معاينة الستوري');modal.querySelector('.story-stage').prepend(editCanvas);
   const picker=document.createElement('input');picker.type='file';picker.accept='image/*';picker.hidden=true;document.body.append(picker);
   const photoReply=document.createElement('input');photoReply.type='file';photoReply.accept='image/*';photoReply.hidden=true;document.body.append(photoReply);
   const button=(label,fn)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=fn;return b;};
+  function openMenu(){
+    if(!menuItems.length)return;
+    menuBox.replaceChildren(...menuItems.map(([label,fn,danger])=>{const b=button(label,()=>{menu.hidden=true;fn();});if(danger)b.className='danger';return b;}),button('إلغاء',()=>{menu.hidden=true;}));
+    menu.hidden=false;menuBox.querySelector('button')?.focus();
+  }
+  dots.onclick=openMenu;menu.addEventListener('click',e=>{if(e.target===menu)menu.hidden=true;});
   function message(e){toast(e.message||'تعذّر الاتصال بخدمة الستوري');}
   async function api(suffix='',options={}) {
     const user=auth?.currentUser;if(!user)throw new Error('سجل الدخول أولًا');
@@ -27,7 +35,7 @@ window.BPBStories = (() => {
     }finally{clearTimeout(timeout);}
   }
   function clearMedia(){preview=null;editCanvas.hidden=true;tools.classList.remove('editing');img.removeAttribute('src');if(blobUrl)URL.revokeObjectURL(blobUrl);blobUrl=null;}
-  function close(){sequence++;clearInterval(timer);timer=null;modal.hidden=true;clearMedia();preview=null;form.reset();busy=false;focusBefore?.focus();}
+  function close(){menu.hidden=true;dots.hidden=true;modal.classList.remove('viewing');sequence++;clearInterval(timer);timer=null;modal.hidden=true;clearMedia();preview=null;form.reset();busy=false;focusBefore?.focus();}
   function showModal(){focusBefore=document.activeElement;modal.hidden=false;modal.querySelector('[data-action="close"]').focus();}
   function circle(label,ring,child,fn){
     const b=button('',fn);b.className='story-circle';b.setAttribute('aria-label',label);
@@ -36,13 +44,17 @@ window.BPBStories = (() => {
   }
   function paint(){
     const grouped=new Map();for(const s of feed.filter(alive)){if(s.owner!==uid && (!contacts[s.owner]||isBlocked(s.owner)))continue;if(!grouped.has(s.owner))grouped.set(s.owner,[]);grouped.get(s.owner).push(s);}
-    const title=document.createElement('h2');title.className='story-title';title.textContent='ستوري';
+    const owners=[...grouped.keys()].sort((x,y)=>(y===uid)-(x===uid));
+    const head=document.createElement('button');head.type='button';head.className='classic-category story-category'+(open?' selected':'');head.setAttribute('aria-expanded',String(open));head.setAttribute('aria-label','ستوري');
+    head.innerHTML='<span><span class="cl">ستوري</span> <span class="story-count"></span></span><span class="category-toggle" aria-hidden="true"></span>';
+    head.querySelector('.story-count').textContent='('+owners.length+')';head.querySelector('.category-toggle').textContent=open?'−':'+';
+    head.onclick=()=>{open=!open;paint();};
+    const panel=document.createElement('div');panel.className='story-panel';panel.hidden=!open;
     const row=document.createElement('div');row.className='story-circles';
     const plus=document.createElement('span');plus.className='story-plus';plus.textContent='+';plus.setAttribute('aria-hidden','true');
     row.append(circle('إضافة ستوري',false,plus,()=>choose()));
-    const owners=[...grouped.keys()].sort((x,y)=>(y===uid)-(x===uid));
     for(const owner of owners){const items=grouped.get(owner);row.append(circle(owner===uid?'أنت':nameOf(owner),true,avatar(owner,'sm'),()=>{queue=items;position=0;showModal();view();}));}
-    strip.replaceChildren(title,row);
+    panel.append(row);strip.replaceChildren(head,panel);
   }
   async function refresh(force=false){
     if(!auth?.currentUser||!me)return;
@@ -53,19 +65,26 @@ window.BPBStories = (() => {
     finally{loading=false;}
   }
   function choose(){
-    showModal();clearMedia();form.hidden=true;tools.replaceChildren();status.textContent='صورة للأصدقاء فقط · تختفي بعد 24 ساعة';modal.querySelector('.story-name').textContent='إضافة ستوري';
+    modal.classList.remove('viewing');dots.hidden=true;menu.hidden=true;showModal();clearMedia();form.hidden=true;tools.replaceChildren();status.textContent='صورة للأصدقاء فقط · تختفي بعد 24 ساعة';modal.querySelector('.story-name').textContent='إضافة ستوري';
     modal.querySelector('.story-progress').replaceChildren();modal.querySelectorAll('.story-prev,.story-next').forEach(b=>b.hidden=true);
     tools.append(button('التقاط صورة',()=>{picker.setAttribute('capture','environment');picker.click();}),button('اختيار من الألبوم',()=>{picker.removeAttribute('capture');picker.click();}));
   }
-  async function load(file){
+  async function decode(file){
     if(!file.type.startsWith('image/')||file.size>20*1024*1024)throw new Error('اختر صورة أصغر من 20 ميجابايت');
     const url=URL.createObjectURL(file);
-    try{
-      const image=new Image();image.src=url;await image.decode();
-      if(image.naturalWidth*image.naturalHeight>25000000)throw new Error('أبعاد الصورة كبيرة جدًا');
-      const scale=Math.min(1,1920/Math.max(image.naturalWidth,image.naturalHeight)),canvas=document.createElement('canvas');canvas.width=Math.round(image.naturalWidth*scale);canvas.height=Math.round(image.naturalHeight*scale);canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height);
-      return canvas;
-    }finally{URL.revokeObjectURL(url);}
+    try{const image=new Image();image.src=url;await image.decode();if(image.naturalWidth*image.naturalHeight>25000000)throw new Error('أبعاد الصورة كبيرة جدًا');return image;}
+    finally{URL.revokeObjectURL(url);}
+  }
+  /* الستوري بحجم شاشة الآيفون كاملة (9:16): الصورة تُقصّ لتملأ الشاشة */
+  async function load(file){
+    const image=await decode(file),W=1080,H=1920,canvas=document.createElement('canvas');canvas.width=W;canvas.height=H;
+    const scale=Math.max(W/image.naturalWidth,H/image.naturalHeight),w=image.naturalWidth*scale,h=image.naturalHeight*scale,ctx=canvas.getContext('2d');
+    ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);ctx.drawImage(image,(W-w)/2,(H-h)/2,w,h);return canvas;
+  }
+  async function compress(file){
+    const image=await decode(file),scale=Math.min(1,1920/Math.max(image.naturalWidth,image.naturalHeight)),canvas=document.createElement('canvas');
+    canvas.width=Math.round(image.naturalWidth*scale);canvas.height=Math.round(image.naturalHeight*scale);canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height);
+    const data=canvas.toDataURL('image/jpeg',.85);if(data.length>5*1024*1024)throw new Error('الصورة كبيرة، اختر صورة أصغر');return data;
   }
   /* تحرير الصورة: فلاتر بالبكسل (تعمل على كل الأجهزة) + نص قابل للسحب */
   const FILTERS=[['none','أصلي'],['bw','أبيض وأسود'],['sepia','سيبيا'],['vivid','حيوي'],['warm','دافئ'],['cool','بارد'],['fade','باهت'],['drama','درامي']];
@@ -105,7 +124,7 @@ window.BPBStories = (() => {
     const ctx=editCanvas.getContext('2d');ctx.drawImage(g,0,0);drawText(ctx,g.width,g.height,st);
   }
   function regrade(){
-    const st=preview;if(!st)return;const w=Math.min(st.base.width,900),g=st.graded;
+    const st=preview;if(!st)return;const w=Math.min(st.base.width,720),g=st.graded;
     g.width=w;g.height=Math.round(w*st.base.height/st.base.width);g.getContext('2d').drawImage(st.base,0,0,g.width,g.height);grade(g,st.filter,st.bright);draw();
   }
   function exportImage(st){
@@ -150,19 +169,22 @@ window.BPBStories = (() => {
   async function publish(){if(busy||!preview)return;busy=true;status.textContent='جاري النشر…';try{await api('',{method:'POST',body:JSON.stringify({image:exportImage(preview)})});close();toast('نُشر الستوري للأصدقاء');await refresh(true);}catch(e){message(e);status.textContent='تعذّر النشر، حاول مجددًا';}finally{busy=false;}}
   function move(n){position+=n;if(position<0)position=0;if(position>=queue.length){close();return;}view();}
   async function view(){
-    clearInterval(timer);clearMedia();preview=null;form.reset();tools.replaceChildren();const s=queue[position],seq=++sequence;if(!alive(s)){move(1);return;}
+    clearInterval(timer);clearMedia();preview=null;form.reset();tools.replaceChildren();menu.hidden=true;modal.classList.add('viewing');const s=queue[position],seq=++sequence;if(!alive(s)){move(1);return;}
     form.hidden=s.owner===uid;status.textContent='جاري التحميل…';modal.querySelector('.story-name').textContent=nameOf(s.owner);
     modal.querySelectorAll('.story-prev,.story-next').forEach(b=>b.hidden=false);
     const progress=modal.querySelector('.story-progress');progress.replaceChildren(...queue.map((_,i)=>{const p=document.createElement('progress');p.max=1;p.value=i<position?1:0;return p;}));
-    if(s.owner===uid){tools.append(button('المشاهدات',async()=>{try{const data=await api('/'+s.id+'/views');if(seq!==sequence)return;status.textContent=data.viewers.length?data.viewers.map(v=>nameOf(v.uid)).join('، '):'لا توجد مشاهدات بعد';}catch(e){message(e);}}),button('حذف الستوري',async()=>{if(!confirm('حذف هذا الستوري؟'))return;try{await api('/'+s.id,{method:'DELETE'});close();await refresh(true);}catch(e){message(e);}}));}
-    else tools.append(button('إبلاغ',async()=>{const reason=prompt('سبب الإبلاغ عن الستوري');if(!reason)return;try{await api('/'+s.id+'/report',{method:'POST',body:JSON.stringify({reason})});toast('تم إرسال البلاغ');}catch(e){message(e);}}));
+    menuItems=s.owner===uid?[
+      ['المشاهدات',async()=>{try{const data=await api('/'+s.id+'/views');if(seq!==sequence)return;status.textContent=data.viewers.length?data.viewers.map(v=>nameOf(v.uid)).join('، '):'لا توجد مشاهدات بعد';}catch(e){message(e);}}],
+      ['حذف الستوري',async()=>{if(!confirm('حذف هذا الستوري؟'))return;try{await api('/'+s.id,{method:'DELETE'});close();await refresh(true);}catch(e){message(e);}},true]
+    ]:[['إبلاغ',async()=>{const reason=prompt('سبب الإبلاغ عن الستوري');if(!reason)return;try{await api('/'+s.id+'/report',{method:'POST',body:JSON.stringify({reason})});toast('تم إرسال البلاغ');}catch(e){message(e);}},true]];
+    dots.hidden=false;
     try{
       const blob=await api('/'+s.id+'/media',{media:true});if(seq!==sequence||modal.hidden||!alive(s))return;
       blobUrl=URL.createObjectURL(blob);img.src=blobUrl;status.textContent='';deadline=Date.now()+6000;
       api('/'+s.id+'/views',{method:'POST'}).catch(()=>{});
       timer=setInterval(()=>{
         if(!alive(s)){move(1);return;}
-        const paused=busy||document.activeElement===input||input.value;
+        const paused=busy||!menu.hidden||document.activeElement===input||input.value;
         if(paused){deadline=Date.now()+6000;return;}
         progress.children[position].value=1-Math.max(0,deadline-Date.now())/6000;
         if(Date.now()>=deadline)move(1);
@@ -178,7 +200,7 @@ window.BPBStories = (() => {
   modal.querySelector('[data-action="photo"]').onclick=()=>photoReply.click();
   modal.querySelector('[data-action="close"]').onclick=close;
   modal.querySelector('.story-prev').onclick=()=>move(-1);modal.querySelector('.story-next').onclick=()=>move(1);
-  let touchX=0;img.addEventListener('touchstart',e=>{touchX=e.changedTouches[0].clientX;},{passive:true});img.addEventListener('touchend',e=>{const delta=e.changedTouches[0].clientX-touchX;if(Math.abs(delta)>60)move(delta<0?1:-1);},{passive:true});
+  let touchX=0;const stageEl=modal.querySelector('.story-stage');stageEl.addEventListener('touchstart',e=>{touchX=e.changedTouches[0].clientX;},{passive:true});stageEl.addEventListener('touchend',e=>{const delta=e.changedTouches[0].clientX-touchX;if(Math.abs(delta)>60)move(delta<0?1:-1);},{passive:true});
   modal.addEventListener('keydown',e=>{
     if(e.key==='Escape'){close();return;}
     if(e.key==='Tab'){const nodes=[...modal.querySelectorAll('button,input')].filter(n=>!n.hidden&&n.offsetParent!==null);const first=nodes[0],last=nodes.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}

@@ -24,6 +24,7 @@ const {chromium}=require('playwright');
  });
  await page.addScriptTag({content:fs.readFileSync('stories.js','utf8')});
  await page.evaluate(()=>BPBStories.refresh(true));
+ await page.locator('.story-category').click();
  await page.getByRole('button',{name:'صديق الاختبار',exact:true}).click();
  await page.getByPlaceholder('رد خاص على الستوري…').fill('جميلة الصورة');
  await page.getByRole('button',{name:'إرسال',exact:true}).click();
