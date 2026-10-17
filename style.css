@@ -453,3 +453,24 @@ form.composer .composer-write input{flex:1;width:0;min-width:0;border:0;backgrou
 .story-modal{overflow:hidden}
 .story-modal:not(.viewing) .story-stage{min-height:200px}
 .story-modal:not(.viewing) .story-tools.editing{flex:0 1 auto;-webkit-overflow-scrolling:touch}
+
+/* خطوط الستوري العربية المضمّنة */
+@font-face{font-family:'Story Cairo';src:url('fonts/story-cairo.woff2') format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:'Story Tajawal';src:url('fonts/story-tajawal.woff2') format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:'Story Almarai';src:url('fonts/story-almarai.woff2') format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:'Story Amiri';src:url('fonts/story-amiri.woff2') format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:'Story Aref Ruqaa';src:url('fonts/story-aref-ruqaa.woff2') format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:'Story Reem Kufi';src:url('fonts/story-reem-kufi.woff2') format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:'Story El Messiri';src:url('fonts/story-el-messiri.woff2') format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:'Story Changa';src:url('fonts/story-changa.woff2') format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:'Story Lalezar';src:url('fonts/story-lalezar.woff2') format('woff2');font-weight:400;font-display:swap}
+@font-face{font-family:'Story Rakkas';src:url('fonts/story-rakkas.woff2') format('woff2');font-weight:400;font-display:swap}
+@font-face{font-family:'Story Katibeh';src:url('fonts/story-katibeh.woff2') format('woff2');font-weight:400;font-display:swap}
+.story-fonts{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px}
+.story-fonts button{flex:0 0 auto;min-height:40px;padding:6px 14px;font-size:18px}
+/* ضغطة مطوّلة: إخفاء الأزرار وتثبيت الصورة */
+.story-modal .story-stage{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+.story-modal.viewing .story-stage{touch-action:none}
+.story-modal.holding header,.story-modal.holding .story-progress,.story-modal.holding .story-reply,.story-modal.holding .story-dots{opacity:0;pointer-events:none}
+.story-modal.holding::before,.story-modal.holding::after{opacity:0}
+.story-modal.viewing header,.story-modal.viewing .story-progress,.story-modal.viewing .story-reply,.story-modal .story-dots{transition:opacity .15s}
