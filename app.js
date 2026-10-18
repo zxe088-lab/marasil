@@ -657,26 +657,20 @@ $('setupBtn').addEventListener('click', async () => {
   if (!name) { toast('اكتب اسم العرض · Enter a display name'); return; }
   if (!$('agreeTerms').checked) { toast('لازم توافق على شروط الاستخدام · Please accept the terms'); return; }
   $('setupBtn').disabled = true;
-  const invite = ($('setupInvite')?.value || '').trim().toUpperCase();
   try {
-    if (isOwner(uid) || !auth.currentUser?.isAnonymous || (invite && inviteOk(invite))) {
+    if (isOwner(uid) || !auth.currentUser?.isAnonymous) {
       let pin;
       for (let i = 0; i < 5; i++) { pin = newPin(); if (!(await fs.doc('pins/' + pin).get()).exists) break; }
       await fs.doc('pins/' + pin).set({ uid });
       await createMe(name, pin);
     } else {
       // طلب انضمام: المالك يوافق ويحدد رمز PIN
-      if (invite) { toast('رمز الدعوة غير صحيح · Invalid invite code'); $('setupBtn').disabled = false; return; }
       await fs.doc('joinRequests/' + uid).set({ name, at: Date.now(), status: 'pending' });
     }
   } catch (e) { console.error(e); toast('صار خطأ، جرّب مرة ثانية' + (e?.code ? ' (' + e.code + ')' : '')); }
   $('setupBtn').disabled = false;
 });
 
-// رمز دعوة يتخطى انتظار الموافقة (يُعطى لمراجع آبل في ملاحظات المراجعة). نخزن البصمة فقط
-const INVITE_HASHES = ['2ah47uqytni'];
-function inviteHash(s){let h1=0xdeadbeef,h2=0x41c6ce57;for(let i=0,ch;i<s.length;i++){ch=s.charCodeAt(i);h1=Math.imul(h1^ch,2654435761);h2=Math.imul(h2^ch,1597334677);}h1=Math.imul(h1^(h1>>>16),2246822507);h1^=Math.imul(h2^(h2>>>13),3266489909);h2=Math.imul(h2^(h2>>>16),2246822507);h2^=Math.imul(h1^(h1>>>13),3266489909);return (4294967296*(2097151&h2)+(h1>>>0)).toString(36);}
-const inviteOk = code => INVITE_HASHES.includes(inviteHash('bpb-invite:' + code));
 
 // إشعارات الآيفون وأنت خارج التطبيق: نحفظ رمز الجهاز في ملفك، والسيرفر يرسل التنبيه
 const Push = IS_NATIVE ? window.Capacitor?.Plugins?.PushNotifications : null;
