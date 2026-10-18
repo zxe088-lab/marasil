@@ -8,7 +8,7 @@ on:
       version:
         description: "App version (CFBundleShortVersionString)"
         required: false
-        default: "1.3.0"
+        default: "1.4.0"
 
 jobs:
   ios-release:
@@ -40,10 +40,10 @@ jobs:
 
       - name: Prepare web files
         run: |
-          [ "$GITHUB_REF_NAME" = "fix/ios-keyboard-viewport" ] || { echo "Internal test build requires fix branch"; exit 1; }
+          case "$GITHUB_REF_NAME" in fix/ios-keyboard-viewport|release/stories-1.4.0) ;; *) echo "Use an approved release branch"; exit 1 ;; esac
           node --test tests/viewport.test.cjs
           rm -rf www && mkdir -p www
-          cp index.html app.js style.css firebase-config.js manifest.json icon-192.png icon-512.png www/
+          cp index.html app.js stories.js style.css firebase-config.js manifest.json icon-192.png icon-512.png www/
           cp blackberry-48.png www/
           for f in privacy.html terms.html; do [ -f "$f" ] && cp "$f" www/; done
           cp -R fonts www/fonts
@@ -83,7 +83,7 @@ jobs:
       - name: App settings
         run: |
           PLIST=ios/App/App/Info.plist
-          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${{ inputs.version || '1.3.0' }}" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${{ inputs.version || '1.4.0' }}" "$PLIST"
           /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName $APP_NAME" "$PLIST" \
             || /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string $APP_NAME" "$PLIST"
           /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" "$PLIST" || true
@@ -194,4 +194,3 @@ jobs:
             build/ios/ipa/*.ipa
             /tmp/xcodebuild_logs/*.log
           if-no-files-found: ignore
-
