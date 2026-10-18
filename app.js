@@ -720,6 +720,7 @@ const unreadOf = c => c.lastTs > Date.now()-MESSAGE_LIFETIME && c.lastFrom && c.
 function renderHome(){
   if (!me) return;
   buildMenu();
+  window.BPBStories?.refresh();
   $('meHeadAvatar').replaceChildren(avatar(uid, 'sm'));
   $('meHeadName').textContent = me.name;
   $('meHeadMsg').textContent = me.msg || statusLabel(me);
@@ -1337,7 +1338,8 @@ function renderMsgs(fromMsgs){
     else { mark = el('span', 'mark d', 'D'); mark.title = 'تم التسليم'; }
     const txt = el('span', 'txt');
     if (m.broadcast) txt.append(el('span', 'bctag', '📢'));
-    if(m.kind === 'richtext' && Array.isArray(m.parts)) {
+    if(m.kind === 'story-reply' && window.BPBStories) { window.BPBStories.renderReply(m, txt); }
+    else if(m.kind === 'richtext' && Array.isArray(m.parts)) {
       for(const part of m.parts.slice(0,128)){
         if(typeof part.text==='string') txt.append(document.createTextNode(part.text));
         else if(Number.isInteger(part.sticker)&&part.sticker>=0&&part.sticker<48) txt.append(stickerFace(part.sticker));
@@ -1851,4 +1853,5 @@ $('grDelete').addEventListener('click', async () => {
 });
 
 boot();
+
 
