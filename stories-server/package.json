@@ -1,0 +1,20 @@
+{
+  "name": "bpb-stories",
+  "private": true,
+  "version": "1.0.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node --env-file=r2.env server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.900.0",
+    "firebase-admin": "^13.10.0",
+    "sharp": "^0.35.5"
+  },
+  "overrides": {
+    "uuid": "^11.1.1"
+  }
+}

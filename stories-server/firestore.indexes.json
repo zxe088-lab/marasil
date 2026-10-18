@@ -1,0 +1,4 @@
+{
+  "indexes": [{"collectionGroup":"stories","queryScope":"COLLECTION","fields":[{"fieldPath":"owner","order":"ASCENDING"},{"fieldPath":"expiresAt","order":"ASCENDING"}]}],
+  "fieldOverrides": []
+}
