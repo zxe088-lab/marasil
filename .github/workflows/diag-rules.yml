@@ -17,4 +17,4 @@ jobs:
           npm install --no-audit --no-fund >/dev/null 2>&1
           npx firebase emulators:exec --only firestore --project demo-bpb "node test.mjs" > out.txt 2>&1 || true
           grep -E "PASS|FAIL|RESULT|rror" out.txt | head -60
-          grep -n -E "FirebaseError|    at |PASS|FAIL|RESULT" out.txt | head -9 | while read l; do echo "::notice::$l"; done
+          grep -E "FAIL|RESULT|FirebaseError" out.txt | head -9 | while read l; do echo "::notice::$l"; done

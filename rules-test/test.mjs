@@ -5,7 +5,7 @@ const env = await initializeTestEnvironment({ projectId: 'demo-bpb', firestore: 
 const dbs = {}; const db = u => (dbs[u] ||= env.authenticatedContext(u).firestore());
 let pass = 0, fail = 0;
 const t = async (name, p) => { try { await p; console.log('PASS', name); pass++; } catch (e) { console.log('FAIL', name, e.message); fail++; } };
-await env.withSecurityRulesDisabled(async c => { for (const u of ['A','B','C','D']) await setDoc(doc(c.firestore(), 'users/' + u), { name: u }); });
+await env.withSecurityRulesDisabled(async c => { const f = c.firestore(); for (const u of ['A','B','C','D']) await setDoc(doc(f, 'users/' + u), { name: u }); });
 const G = 'chats/g1', now = Date.now();
 await t('owner creates group with invites only', assertSucceeds(setDoc(doc(db('A'), G), { isGroup: true, name: 'G', owner: 'A', admins: [], members: ['A'], invites: { B: now, D: now }, lastTs: now })));
 await t('non-invited cannot join', assertFails(updateDoc(doc(db('C'), G), { members: arrayUnion('C') })));
