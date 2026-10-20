@@ -128,9 +128,8 @@ window.BPBStories = (() => {
     const portrait=Math.abs(iw/ih-W/H)<0.12&&iw>=540;
     if(portrait){const scale=Math.max(W/iw,H/ih),w=iw*scale,h=ih*scale;ctx.drawImage(image,(W-w)/2,(H-h)/2,w,h);return canvas;}
     /* صورة مربعة أو صغيرة أو عرضية: تظهر كاملة بحجمها (بدون تكبير) في الوسط */
-    /* خلفية متدرجة من لون الصورة نفسها (بدون نسخة ثانية من الصورة) */
-    const tiny=document.createElement('canvas');tiny.width=tiny.height=1;const tc=tiny.getContext('2d');tc.drawImage(image,0,0,1,1);const [cr,cg,cb]=tc.getImageData(0,0,1,1).data;
-    const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,`rgb(${cr*.55|0},${cg*.55|0},${cb*.55|0})`);g.addColorStop(1,`rgb(${cr*.2|0},${cg*.2|0},${cb*.2|0})`);ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+    /* الفراغ فوق وتحت الصورة أسود */
+    ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);
     const fit=Math.min(W*0.94/iw,H*0.8/ih,1),w=iw*fit,h=ih*fit;ctx.imageSmoothingQuality='high';ctx.drawImage(image,(W-w)/2,(H-h)/2,w,h);return canvas;
   });
   const compress=file=>withImage(file,image=>{
