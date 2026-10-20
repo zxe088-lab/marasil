@@ -19,15 +19,10 @@ jobs:
           req(){ # token method path body label
             c=$(curl -s -o r.json -w '%{http_code}' -X "$2" -H "Authorization: Bearer $1" -H 'Content-Type: application/json' "$B/$3" ${4:+-d "$4"}); echo "::notice::$5 -> $c $(jq -c '.error.message // empty' r.json 2>/dev/null | cut -c1-120)"; }
           req "$TA" PATCH "chats/$G?currentDocument.exists=false" "{\"fields\":{\"isGroup\":{\"booleanValue\":true},\"name\":{\"stringValue\":\"probe\"},\"owner\":{\"stringValue\":\"$A\"},\"members\":$(arr $A $Bu),\"createdAt\":{\"integerValue\":\"$NOW\"},\"lastTs\":{\"integerValue\":\"$NOW\"},\"lastMsg\":{\"stringValue\":\"x\"},\"lastFrom\":{\"stringValue\":\"$A\"},\"lastKind\":{\"stringValue\":\"system\"}}}" "1 owner creates group"
-          req "$TA" PATCH "chats/$G?updateMask.fieldPaths=admins" "{\"fields\":{\"admins\":$(arr $Bu)}}" "2 owner sets admins"
-          req "$TB" PATCH "chats/$G?updateMask.fieldPaths=members" "{\"fields\":{\"members\":$(arr $A $Bu $C)}}" "3 member(admin) adds member"
-          req "$TB" PATCH "chats/$G?updateMask.fieldPaths=name" "{\"fields\":{\"name\":{\"stringValue\":\"renamed\"}}}" "4 member(admin) renames"
-          req "$TA" PATCH "chats/$G?updateMask.fieldPaths=invites" "{\"fields\":{\"invites\":{\"mapValue\":{\"fields\":{\"$C\":{\"integerValue\":\"$NOW\"}}}}}}" "5 owner writes invites map"
-          req "$TC" GET "chats/$G" "" "6 invitee reads group"
-          req "$TC" PATCH "chats/$G?updateMask.fieldPaths=members&updateMask.fieldPaths=invites.$C" "{\"fields\":{\"members\":$(arr $A $Bu $C)}}" "7 invitee joins self"
-          req "$TB" PATCH "chats/$G?updateMask.fieldPaths=lastMsg" "{\"fields\":{\"lastMsg\":{\"stringValue\":\"hi\"}}}" "8 member updates lastMsg"
-          req "$TA" PATCH "chats/$G?updateMask.fieldPaths=owner" "{\"fields\":{\"owner\":{\"stringValue\":\"$Bu\"}}}" "9 owner transfers ownership"
-          req "$TB" DELETE "chats/$G" "" "10 new owner deletes group"
-          req "$TA" DELETE "chats/$G" "" "11 cleanup by A"
+          IMG=$(head -c 450000 /dev/urandom | base64 -w0)
+          printf '{"fields":{"from":{"stringValue":"%s"},"ts":{"integerValue":"%s"},"kind":{"stringValue":"photo"},"image":{"stringValue":"data:image/jpeg;base64,%s"},"expiresAt":{"timestampValue":"2026-12-01T00:00:00Z"}}}' "$Bu" "$NOW" "$IMG" > big.json
+          c=$(curl -s -o r.json -w '%{http_code}' -X POST -H "Authorization: Bearer $TB" -H 'Content-Type: application/json' "$B/chats/$G/messages" --data-binary @big.json); echo "::notice::2 member posts 600KB photo message -> $c $(jq -c '.error.message // empty' r.json|cut -c1-100)"
+          req "$TB" POST "chats/$G/messages" "{\"fields\":{\"from\":{\"stringValue\":\"$Bu\"},\"ts\":{\"integerValue\":\"$NOW\"},\"kind\":{\"stringValue\":\"group-invite\"},\"gid\":{\"stringValue\":\"x\"}}}" "3 member posts custom kind"
+          req "$TA" DELETE "chats/$G" "" "4 owner deletes group (cleanup)"
           for T in "$TA" "$TB" "$TC"; do curl -s -o /dev/null -H 'Content-Type: application/json' -d "{\"idToken\":\"$T\"}" "https://identitytoolkit.googleapis.com/v1/accounts:delete?key=$KEY"; done
           echo "::notice::done"
