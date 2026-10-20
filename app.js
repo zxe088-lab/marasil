@@ -110,7 +110,7 @@ function linkPins(text){
     const pin = m[2].toUpperCase(); if (!isPinLike(pin)) continue;
     const start = m.index + m[1].length;
     if (start > last) frag.append(document.createTextNode(s.slice(last, start)));
-    const b = el('button', 'pin-chip', m[2]); b.type = 'button'; b.title = 'اضغط لنسخ رمز PIN';
+    const b = el('span', 'pin-chip', m[2]); b.setAttribute('role', 'button'); b.tabIndex = 0; b.title = 'اضغط لنسخ رمز PIN'; // span (مو button) عشان يترتب مع النص: PIN يسار والرقم يمين
     b.addEventListener('click', e => { e.stopPropagation(); copyPinText(pin); });
     frag.append(b); last = start + 8;
   }
