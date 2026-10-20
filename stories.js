@@ -259,7 +259,7 @@ window.BPBStories = (() => {
   });
   document.addEventListener('visibilitychange',()=>{if(document.hidden)close();else refresh(true);});
   auth?.onAuthStateChanged(()=>{feed=[];lastFetch=0;account='';close();strip.replaceChildren();});
-  setInterval(()=>{if(!document.hidden){paint();if(!$('s-home').hidden)refresh();}},15000);
+  setInterval(()=>{if(!document.hidden&&!$('s-home').hidden){paint();refresh();}},15000);
   function renderReply(m,target){
     const quote=button('رد على ستوري',async()=>{if(!alive(m.story)){quote.textContent='انتهى الستوري';return;}queue=[m.story];position=0;showModal();view();});
     quote.className='story-quote';if(!alive(m.story))quote.textContent='انتهى الستوري';target.append(quote);

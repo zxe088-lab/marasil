@@ -145,10 +145,23 @@ function tzOffset(tz){
 function colorOf(id){ let h = 0; for (const c of (dataOf(id)?.pin || id)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return COLORS[h % COLORS.length]; }
 const initialOf = id => [...nameOf(id)].find(ch => /\p{L}/u.test(ch)) || '؟';
 const photoOf = id => { const p = dataOf(id)?.photo; return typeof p === 'string' && p.startsWith('data:image/') ? p : ''; };
+// الصور المحفوظة كنص (data URL) نحوّلها مرة وحدة لرابط blob، عشان الجوال ما يعيد فك الصورة كل ما تتحدث الشاشة
+const blobCache = new Map();
+function blobUrlOf(data){
+  if (typeof data !== 'string' || !data.startsWith('data:')) return data;
+  let u = blobCache.get(data); if (u) return u;
+  try {
+    const comma = data.indexOf(','), mime = (data.slice(5, comma).split(';')[0]) || 'image/jpeg', bin = atob(data.slice(comma + 1)), arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    u = URL.createObjectURL(new Blob([arr], { type: mime }));
+  } catch { return data; }
+  if (blobCache.size >= 300) { const [k, v] = blobCache.entries().next().value; blobCache.delete(k); setTimeout(() => URL.revokeObjectURL(v), 60000); }
+  blobCache.set(data, u); return u;
+}
 function avatar(id, size = ''){
   const a = el('div', 'avatar' + (size ? ' ' + size : '')); a.style.background = colorOf(id);
   const p = photoOf(id);
-  if (p) { const img = el('img'); img.src = p; img.alt = ''; a.append(img); } else a.textContent = initialOf(id);
+  if (p) { const img = el('img'); img.src = blobUrlOf(p); img.alt = ''; img.decoding = 'async'; a.append(img); } else a.textContent = initialOf(id);
   return a;
 }
 function statusIcon(id){
@@ -747,7 +760,7 @@ function heartbeat(){
   const beat = () => { if (document.visibilityState === 'visible') fs.doc('users/' + uid).update({ lastSeen: Date.now() }).catch(() => {}); };
   beat(); setInterval(beat, 4 * 60 * 1000);
   document.addEventListener('visibilitychange', () => { beat(); markRead(); updateTitle(); });
-  setInterval(() => { renderHomeSoon(); if (!$('s-profile').hidden) renderProfile(); if (chatPeer || chatGroup) renderChatHead(); }, 30000);
+  setInterval(() => { if (document.hidden) return; renderHomeSoon(); if (!$('s-profile').hidden) renderProfile(); if (chatPeer || chatGroup) renderChatHead(); }, 30000);
 }
 
 function watchUser(id){
@@ -804,7 +817,8 @@ function listen(){
 
 /* ---------- الرئيسية ---------- */
 let homeTimer = null;
-function renderHomeSoon(){ clearTimeout(homeTimer); homeTimer = setTimeout(renderHome, 30); }
+// الشاشة الرئيسية ما نعيد رسمها وهي مخفية (مثلاً وأنت داخل دردشة)؛ نرسمها لما ترجع لها
+function renderHomeSoon(){ clearTimeout(homeTimer); homeTimer = setTimeout(() => { if ($('s-home').hidden) { updateTitle(); return; } renderHome(); }, 60); }
 const unreadOf = c => c.lastTs > Date.now()-MESSAGE_LIFETIME && c.lastFrom && c.lastFrom !== uid && c.lastTs > ((c.read || {})[uid] || 0);
 
 function renderHome(){
@@ -1338,7 +1352,7 @@ function zoomPhoto(id){
     v.addEventListener('click', () => { v.hidden = true; v.querySelector('.pz-img').style.backgroundImage = ''; });
     document.body.append(v);
   }
-  v.querySelector('.pz-img').style.backgroundImage = 'url("' + String(p).replace(/"/g, '%22') + '")';
+  v.querySelector('.pz-img').style.backgroundImage = 'url("' + String(blobUrlOf(p)).replace(/"/g, '%22') + '")';
   v.hidden = false;
 }
 $('chAvatar').addEventListener('click', e => { if (chatGroup || !chatPeer || !photoOf(chatPeer)) return; e.stopPropagation(); e.preventDefault(); zoomPhoto(chatPeer); });
@@ -1494,8 +1508,8 @@ function renderMsgs(fromMsgs){
       const targetChat = chatId; button.onclick = () => openOncePhoto(targetChat, m.id, button); txt.append(button);
     }
     else if (m.kind === 'photo' && typeof m.image === 'string' && /^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/.test(m.image)) {
-      const im = el('img', 'chat-photo'); im.alt = 'صورة'; im.loading = 'lazy'; im.src = m.image;
-      im.addEventListener('click', () => viewPhoto(m.image)); txt.classList.add('photo-message'); txt.append(im);
+      const im = el('img', 'chat-photo'), src = blobUrlOf(m.image); im.alt = 'صورة'; im.loading = 'lazy'; im.decoding = 'async'; im.src = src;
+      im.addEventListener('click', () => viewPhoto(src)); txt.classList.add('photo-message'); txt.append(im);
     }
     else if (m.kind === 'group-invite' && typeof m.gid === 'string') {
       txt.classList.add('group-invite');
@@ -1694,7 +1708,7 @@ function viewPhoto(src){
 $('chatCameraInput').onchange=()=>{const file=$('chatCameraInput').files[0];$('chatCameraInput').value='';if(file)sendOncePhoto(file);};
 $('closeOnceViewer').onclick=closeOncePhoto;
 document.addEventListener('visibilitychange',()=>{if(document.hidden){cancelVoice();closeOncePhoto();updateComposer();}});
-setInterval(()=>{if(!document.hidden){if(chatId)renderMsgsSoon();renderChats();}},60000);
+setInterval(()=>{if(!document.hidden){if(chatId)renderMsgsSoon();if(!$('s-home').hidden)renderChats();}},60000);
 function editorParts(){
   const parts=[];
   const text=value=>{value=value.replace(/\u200b/g,'');if(!value)return;const last=parts[parts.length-1];if(last&&typeof last.text==='string')last.text+=value;else parts.push({text:value});};
