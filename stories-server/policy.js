@@ -35,4 +35,16 @@ function audioBytes(data) {
   if (!(mp4 || mp3 || webm || ogg || wav)) fail(400, 'محتوى الصوت غير صالح');
   return {bytes, type: match[1]};
 }
-module.exports = {DAY, fail, active, canRead, imageBytes, audioBytes};
+const VIDEO_TYPES = new Set(['video/mp4','video/quicktime','video/x-m4v']);
+// Story video up to 30 seconds: validated by declared type, size and MP4/QuickTime signature.
+function videoBytes(data) {
+  if (typeof data !== 'string') fail(400, 'ملف الفيديو غير صالح');
+  if (data.length > 41 * 1024 * 1024) fail(413, 'الفيديو أكبر من الحد المسموح');
+  const match = /^data:(video\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/]+={0,2})$/.exec(data);
+  if (!match || !VIDEO_TYPES.has(match[1])) fail(400, 'نوع الفيديو غير مدعوم، استخدم MP4 أو MOV');
+  const bytes = Buffer.from(match[2], 'base64');
+  if (!bytes.length || bytes.length > 30 * 1024 * 1024) fail(413, 'الفيديو أكبر من الحد المسموح');
+  if (bytes.subarray(4, 8).toString() !== 'ftyp') fail(400, 'محتوى الفيديو غير صالح');
+  return {bytes, type: match[1]};
+}
+module.exports = {DAY, fail, active, canRead, imageBytes, audioBytes, videoBytes};

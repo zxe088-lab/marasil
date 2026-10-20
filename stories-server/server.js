@@ -7,7 +7,7 @@ const {getAuth} = require('firebase-admin/auth');
 const {getFirestore, Timestamp} = require('firebase-admin/firestore');
 const {S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, ListObjectsV2Command} = require('@aws-sdk/client-s3');
 const sharp = require('sharp');
-const {DAY, fail, active, canRead, imageBytes, audioBytes} = require('./policy');
+const {DAY, fail, active, canRead, imageBytes, audioBytes, videoBytes} = require('./policy');
 for (const key of ['R2_ACCOUNT_ID','R2_ACCESS_KEY_ID','R2_SECRET_ACCESS_KEY','R2_BUCKET']) if (!process.env[key]) throw new Error('Missing '+key);
 const serviceAccount = require(path.resolve(process.env.GOOGLE_APPLICATION_CREDENTIALS || './firebase-admin.json'));
 initializeApp({credential:cert(serviceAccount)});
@@ -46,13 +46,15 @@ async function normalize(data, reply=false) {
     return out;
   } catch(e) { if(e.status)throw e;fail(400,'تعذّر قراءة الصورة'); }
 }
+// Story uploads with video can reach ~41MB of base64 JSON.
+const body0limit=()=>42*1024*1024;
 async function jsonBody(req, limit=6*1024*1024) {
   let size=0; const chunks=[];
   for await(const chunk of req) { size+=chunk.length;if(size>limit)fail(413,'الملف كبير');chunks.push(chunk); }
   try {return JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{fail(400,'طلب غير صالح');}
 }
-const summary=s=>({id:s.id,owner:s.owner,createdAt:s.createdAt,expiresAt:s.expiresAt,...(s.audioKey?{audio:true,audioDur:s.audioDur||0}:{})});
-const dropObjects=async story=>{for(const Key of [story.key,story.audioKey])if(Key)await r2.send(new DeleteObjectCommand({Bucket,Key}));};
+const summary=s=>({id:s.id,owner:s.owner,createdAt:s.createdAt,expiresAt:s.expiresAt,...(s.audioKey?{audio:true,audioDur:s.audioDur||0}:{}),...(s.videoKey?{video:true,videoDur:s.videoDur||0}:{})});
+const dropObjects=async story=>{for(const Key of [story.key,story.audioKey,story.videoKey])if(Key)await r2.send(new DeleteObjectCommand({Bucket,Key}));};
 async function route(req,res,uid,pathname) {
   if(pathname==='/api/stories' && req.method==='GET') {
     const contacts=await db.collection(`users/${uid}/contacts`).limit(300).get();
@@ -67,16 +69,17 @@ async function route(req,res,uid,pathname) {
   }
   if(pathname==='/api/stories' && req.method==='POST') {
     await quota(uid,'publish',20);
-    const body=await jsonBody(req,11*1024*1024), image=await normalize(body.image), audio=body.audio==null?null:audioBytes(body.audio);
-    const id=crypto.randomUUID(), now=Date.now(), key=`stories/${uid}/${id}.jpg`, audioKey=audio?`stories/${uid}/${id}.audio`:null, audioDur=Math.min(120,Math.max(0,Math.round(Number(body.audioDur)||0)));
+    const body=await jsonBody(req,body0limit(req)), image=await normalize(body.image), audio=body.audio==null?null:audioBytes(body.audio), video=body.video==null?null:videoBytes(body.video);
+    const id=crypto.randomUUID(), now=Date.now(), key=`stories/${uid}/${id}.jpg`, audioKey=audio?`stories/${uid}/${id}.audio`:null, audioDur=Math.min(120,Math.max(0,Math.round(Number(body.audioDur)||0))), videoKey=video?`stories/${uid}/${id}.video`:null, videoDur=Math.min(30,Math.max(0,Math.round((Number(body.videoDur)||0)*10)/10));
     // A pending record lets cleanup recover orphaned objects if the process dies.
-    await storyRef(id).set({owner:uid,key,...(audio?{audioKey,audioType:audio.type,audioDur}:{}),state:'pending',createdAt:now,expiresAt:now+DAY,cleanupAt:now+10*60000});
+    await storyRef(id).set({owner:uid,key,...(audio?{audioKey,audioType:audio.type,audioDur}:{}),...(video?{videoKey,videoType:video.type,videoDur}:{}),state:'pending',createdAt:now,expiresAt:now+DAY,cleanupAt:now+10*60000});
     await r2.send(new PutObjectCommand({Bucket,Key:key,Body:image,ContentType:'image/jpeg',CacheControl:'private, no-store'}));
     if(audio)await r2.send(new PutObjectCommand({Bucket,Key:audioKey,Body:audio.bytes,ContentType:audio.type,CacheControl:'private, no-store'}));
+    if(video)await r2.send(new PutObjectCommand({Bucket,Key:videoKey,Body:video.bytes,ContentType:video.type,CacheControl:'private, no-store'}));
     await storyRef(id).update({state:'ready',cleanupAt:now+DAY});
-    return {story:summary({id,owner:uid,createdAt:now,expiresAt:now+DAY,audioKey,audioDur})};
+    return {story:summary({id,owner:uid,createdAt:now,expiresAt:now+DAY,audioKey,audioDur,videoKey,videoDur})};
   }
-  const match=/^\/api\/stories\/([A-Za-z0-9_-]+)(?:\/(media|audio|views|reply|report))?$/.exec(pathname);
+  const match=/^\/api\/stories\/([A-Za-z0-9_-]+)(?:\/(media|audio|video|views|reply|report))?$/.exec(pathname);
   if(!match)fail(404,'غير موجود');
   const [,id,action]=match;
   if(!action && req.method==='DELETE'){
@@ -94,6 +97,13 @@ async function route(req,res,uid,pathname) {
     const bytes=await object.Body.transformToByteArray();
     if(!active(story))fail(410,'انتهت اليومية');
     res.setHeader('Content-Type','image/jpeg');res.end(Buffer.from(bytes));return null;
+  }
+  if(action==='video' && req.method==='GET') {
+    if(!story.videoKey)fail(404,'لا يوجد فيديو');
+    const object=await r2.send(new GetObjectCommand({Bucket,Key:story.videoKey}));
+    const bytes=await object.Body.transformToByteArray();
+    if(!active(story))fail(410,'انتهت اليومية');
+    res.setHeader('Content-Type',story.videoType||'video/mp4');res.end(Buffer.from(bytes));return null;
   }
   if(action==='audio' && req.method==='GET') {
     if(!story.audioKey)fail(404,'لا يوجد صوت');
@@ -167,7 +177,7 @@ const server=http.createServer(async(req,res)=>{
     if(result!==null){res.setHeader('Content-Type','application/json');res.end(JSON.stringify(result));}
   }catch(e){if(!res.headersSent){res.statusCode=e.status||500;res.setHeader('Content-Type','application/json');res.end(JSON.stringify({error:e.status?e.message:'تعذّر الاتصال بخدمة اليوميات'}));}else res.end();if(!e.status)console.error('request failed',e.code||e.name);}
 });
-server.requestTimeout=30000;server.headersTimeout=15000;
+server.requestTimeout=180000;server.headersTimeout=15000;
 if(process.argv.includes('--check')){
   Promise.all([r2.send(new ListObjectsV2Command({Bucket,MaxKeys:1})),db.collection('users').limit(1).get()]).then(()=>console.log('R2 AND FIREBASE OK')).catch(e=>{console.error('CHECK FAILED',e.code||e.name);process.exitCode=1;}).finally(()=>{r2.destroy();db.terminate();});
 }else{
