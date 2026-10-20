@@ -545,7 +545,7 @@ form.composer .composer-write input{flex:1;width:0;min-width:0;border:0;backgrou
 .story-modal.viewing .story-stage .story-video{position:absolute;inset:0;width:100%;height:100%;max-height:none;object-fit:cover;border-radius:0}
 .story-tools button.primary{background:#7b2cbf;color:#fff;border-color:#5a1f8f}
 /* PIN قابل للنسخ داخل الرسائل */
-.pin-chip{display:inline;border:0;border-bottom:1px dashed currentColor;background:rgba(0,140,211,.1);color:#006fa8;font:inherit;font-weight:700;letter-spacing:1px;padding:0 3px;margin:0 1px;border-radius:3px;cursor:pointer;direction:ltr;unicode-bidi:isolate}
+.pin-chip{display:inline;border:0;border-bottom:1px dashed currentColor;background:rgba(0,140,211,.1);color:#006fa8;font:inherit;font-weight:700;letter-spacing:1px;padding:0 3px;margin:0 1px;border-radius:3px;cursor:pointer;unicode-bidi:normal}
 .mine .pin-chip{color:#004f78}
 #pfPin{cursor:pointer}
 .my-pin-card{margin-top:14px}.my-pin-card .pin{font-size:18px;direction:ltr;unicode-bidi:isolate}.my-pin-card .line{margin-top:8px;gap:8px}
