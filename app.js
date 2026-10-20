@@ -98,6 +98,10 @@ const PIN_RE = /(^|[^0-9A-Za-z])([0-9A-Za-z]{8})(?![0-9A-Za-z])/g;
 const isPinLike = t => /^[0-9A-Z]{8}$/.test(t) && /[0-9]/.test(t);
 function extractPin(text){ for (const m of String(text || '').matchAll(PIN_RE)) { const p = m[2].toUpperCase(); if (isPinLike(p)) return p; } return ''; }
 let lastCopiedPin = '', lastCopiedAt = 0;
+// مهلة لعمليات السيرفر عشان ما يعلق التطبيق إذا الشبكة ضعيفة
+const timed = (p, ms = 12000) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(Object.assign(new Error('timeout'), { code: 'timeout' })), ms))]);
+const netMsg = e => ['timeout', 'unavailable', 'deadline-exceeded'].includes(e?.code) ? 'الاتصال بطيء أو مقطوع، حاول مرة ثانية' : e?.code === 'permission-denied' ? 'العملية مرفوضة من السيرفر' : 'صار خطأ، حاول مرة ثانية';
+let openingChat = null, addBusy = false;
 async function copyPinText(pin){
   lastCopiedPin = pin; lastCopiedAt = Date.now();
   try { await navigator.clipboard.writeText(pin); toast('تم نسخ ' + pin + ' · الصقه في «إضافة»'); }
@@ -1055,16 +1059,16 @@ function pendingRequests(){
 async function respondRequest(id, accept){
   try {
     const ref = fs.doc('contactRequests/' + id);
-    if (!accept) { await ref.delete(); return; }
-    await fs.runTransaction(async tx => {
+    if (!accept) { await timed(ref.delete()); return; }
+    await timed(fs.runTransaction(async tx => {
       const snap = await tx.get(ref), r = snap.data();
       if (!snap.exists || r.to !== uid || r.status !== 'pending' || isBlocked(r.from)) throw Error('invalid request');
       tx.update(ref, { status: 'accepted' });
       tx.set(fs.doc('users/' + uid + '/contacts/' + r.from), { at: Date.now(), cat: DEFAULT_CAT }, { merge: true });
       tx.set(fs.doc('users/' + r.from + '/contacts/' + uid), { at: Date.now(), cat: r.cat || DEFAULT_CAT }, { merge: true });
-    });
+    }), 15000);
     toast('تم قبول طلب الإضافة'); play('contact');
-  } catch { toast('تعذر تحديث الطلب. تحقق من الاتصال وقواعد Firebase'); }
+  } catch (e) { console.error(e); toast(e?.message === 'invalid request' ? 'الطلب انتهى أو انلغى' : 'تعذر تحديث الطلب: ' + netMsg(e)); }
 }
 function renderPending(){
   const list = $('pendingList'); list.replaceChildren();
@@ -1137,11 +1141,17 @@ $('addShareMine').addEventListener('click', async () => {
 $('pfPin').addEventListener('click', () => { const p = $('pfPin').textContent.trim(); if (p) copyPinText(p); });
 $('addForm').addEventListener('submit', async e => {
   e.preventDefault();
+  if (addBusy) return;
+  const btn = $('addForm').querySelector('button[type=submit]');
+  addBusy = true; btn.disabled = true; const label = btn.textContent; btn.textContent = 'جاري الإرسال…';
+  try { await addByPin(); } finally { addBusy = false; btn.disabled = false; btn.textContent = label; }
+});
+async function addByPin(){
   const pin = extractPin($('addPin').value) || $('addPin').value.trim().toUpperCase();
   if (!/^[0-9A-Z]{8}$/.test(pin)) { toast('رمز PIN لازم يكون 8 خانات (أرقام وحروف إنجليزية)'); return; }
   if (pin === me.pin) { toast('هذا رمزك أنت'); return; }
   try {
-    const p = await fs.doc('pins/' + pin).get();
+    const p = await timed(fs.doc('pins/' + pin).get());
     if (!p.exists) { toast('ما لقينا أحد بهذا الرمز'); return; }
     const cid = p.data().uid;
     if (cid === uid || contacts[cid]) { toast('هذا الشخص مضاف عندك'); return; }
@@ -1150,10 +1160,10 @@ $('addForm').addEventListener('submit', async e => {
     if (reverse) { show('s-home'); setTab('pending'); toast('لديك طلب وارد من هذا الشخص'); return; }
     const existing = Object.values(outgoingRequests).find(r => r.to === cid && r.status === 'pending');
     if (existing) { toast('الطلب معلّق بالفعل'); return; }
-    await fs.doc('contactRequests/' + uid + '_' + cid).set({ from: uid, to: cid, cat: $('addCat').value, status: 'pending', createdAt: Date.now() });
+    await timed(fs.doc('contactRequests/' + uid + '_' + cid).set({ from: uid, to: cid, cat: $('addCat').value, status: 'pending', createdAt: Date.now() }));
     toast('تم إرسال طلب الإضافة'); show('s-home'); setTab('pending');
-  } catch (err) { console.error(err); toast('ما قدرنا نضيفه، جرّب مرة ثانية'); }
-});
+  } catch (err) { console.error(err); toast('ما قدرنا نرسل الطلب: ' + netMsg(err)); }
+}
 
 function askText(title, value){
   return new Promise(resolve => {
@@ -1369,9 +1379,15 @@ $('pfDelete').addEventListener('click', async () => {
 /* ---------- الدردشة ---------- */
 async function openChat(peer){
   if (chatPeer === peer && !$('s-chat').hidden) return;
+  if (openingChat === peer) return;
   const id = chatIdWith(peer);
-  try { await fs.doc('chats/' + id).set({ members: [uid, peer].sort() }, { merge: true }); }
-  catch (e) { console.error(e); toast('ما قدرنا نفتح الدردشة'); return; }
+  // الدردشة موجودة: نفتحها على طول بدون انتظار السيرفر
+  if (!(chats[id]?.members || []).includes(uid)) {
+    openingChat = peer;
+    try { await timed(fs.doc('chats/' + id).set({ members: [uid, peer].sort() }, { merge: true }), 10000); }
+    catch (e) { console.error(e); toast('ما قدرنا نفتح الدردشة: ' + netMsg(e)); return; }
+    finally { openingChat = null; }
+  }
   show('s-chat');
   // نوقف مستمعات الدردشة السابقة (قروب أو خاص) عشان ما تطغى رسائلها على هذي الدردشة
   unsubMsgs?.(); unsubChat?.(); unsubMsgs = unsubChat = null;
@@ -2021,7 +2037,7 @@ function grCount(){ $('grCount').textContent = '(' + (Object.keys(grSel).length 
 async function setGroupAdmin(id, on){
   const gid = grEdit; if (!gid) return;
   try {
-    await fs.doc('chats/' + gid).update({ admins: on ? firebase.firestore.FieldValue.arrayUnion(id) : firebase.firestore.FieldValue.arrayRemove(id) });
+    await timed(fs.doc('chats/' + gid).update({ admins: on ? firebase.firestore.FieldValue.arrayUnion(id) : firebase.firestore.FieldValue.arrayRemove(id) }));
     toast(on ? nameOf(id) + ' صار مدير للمجموعة' : 'تم إلغاء إدارة ' + nameOf(id));
     setTimeout(renderGroupMembers, 300);
   } catch (e) { console.error(e); toast('ما قدرنا نغيّر المدير: ' + permErr(e)); }
@@ -2030,7 +2046,7 @@ async function transferGroup(id){
   const gid = grEdit, g = groupDoc(gid); if (!g) return;
   const ok = await askText('نقل ملكية المجموعة لـ ' + nameOf(id) + '؟ بتصير مدير بعدها. اكتب "نقل" للتأكيد'); if (ok !== 'نقل') return;
   const admins = [...new Set([...(g.admins || []).filter(a => a !== id), uid])];
-  try { await fs.doc('chats/' + gid).update({ owner: id, admins }); toast('صار ' + nameOf(id) + ' مالك المجموعة'); back(); }
+  try { await timed(fs.doc('chats/' + gid).update({ owner: id, admins })); toast('صار ' + nameOf(id) + ' مالك المجموعة'); back(); }
   catch (e) { console.error(e); toast('ما قدرنا ننقل الملكية: ' + permErr(e)); }
 }
 // إرسال دعوة المجموعة في الدردشة الخاصة مع كل شخص
@@ -2040,11 +2056,11 @@ async function sendGroupInvites(gid, gname, ids){
     if (isBlocked(id) || !contacts[id]) continue;
     const cid = chatIdWith(id), ts = Date.now(), expiresAt = firebase.firestore.Timestamp.fromMillis(ts + MESSAGE_LIFETIME);
     try {
-      await fs.doc('chats/' + cid).set({ members: [uid, id].sort() }, { merge: true });
+      if (!(chats[cid]?.members || []).includes(uid)) await timed(fs.doc('chats/' + cid).set({ members: [uid, id].sort() }, { merge: true }), 10000);
       const b = fs.batch(), msg = fs.collection('chats/' + cid + '/messages').doc();
       b.set(msg, { from: uid, ts, kind: 'group-invite', gid, gname: String(gname || '').slice(0, 40), expiresAt });
       b.update(fs.doc('chats/' + cid), { lastMsg: '👥 دعوة لمجموعة «' + String(gname || '').slice(0, 40) + '»', lastTs: ts, lastFrom: uid, lastKind: 'group-invite', ['read.' + uid]: ts });
-      await b.commit(); notifyPush(cid); sent++;
+      await timed(b.commit()); notifyPush(cid); sent++;
     } catch (e) { console.error('invite', id, e); }
   }
   return sent;
@@ -2053,13 +2069,13 @@ async function answerGroupInvite(gid, accept, button){
   if (button) button.disabled = true;
   const ref = fs.doc('chats/' + gid), del = firebase.firestore.FieldValue.delete();
   try {
-    if (accept) await ref.update({ members: firebase.firestore.FieldValue.arrayUnion(uid), ['invites.' + uid]: del });
-    else await ref.update({ ['invites.' + uid]: del });
+    if (accept) await timed(ref.update({ members: firebase.firestore.FieldValue.arrayUnion(uid), ['invites.' + uid]: del }));
+    else await timed(ref.update({ ['invites.' + uid]: del }));
     toast(accept ? 'انضممت للمجموعة ✅' : 'تم رفض الدعوة');
     if (accept) { show('s-home', false); openGroup(gid); }
   } catch (e) {
     console.error(e); if (button) button.disabled = false;
-    toast(e?.code === 'permission-denied' ? 'الدعوة انتهت أو أُلغيت' : 'ما قدرنا نرد على الدعوة، تأكد من الاتصال');
+    toast(e?.code === 'permission-denied' ? 'الدعوة انتهت أو أُلغيت' : 'ما قدرنا نرد على الدعوة: ' + netMsg(e));
   }
 }
 $('grSave').addEventListener('click', async () => {
@@ -2074,11 +2090,11 @@ $('grSave').addEventListener('click', async () => {
     if (!grEdit) {
       const ref = fs.collection('chats').doc(), invites = Object.fromEntries(sel.map(id => [id, now]));
       const base = { isGroup: true, name, owner: uid, admins: [], createdAt: now, lastTs: now, lastMsg: 'أُنشئت المجموعة', lastFrom: uid, lastKind: 'system', read: { [uid]: now } };
-      try { await ref.set({ ...base, members: [uid], invites }); }
+      try { await timed(ref.set({ ...base, members: [uid], invites })); }
       catch (e) {
         // قواعد Firebase القديمة تتطلب عضوين على الأقل: نضيف المختارين مباشرة
         if (e?.code !== 'permission-denied') throw e;
-        await ref.set({ ...base, members: [uid, ...sel] }); toast('تم إنشاء المجموعة ✅'); show('s-home', false); openGroup(ref.id); return;
+        await timed(ref.set({ ...base, members: [uid, ...sel] })); toast('تم إنشاء المجموعة ✅'); show('s-home', false); openGroup(ref.id); return;
       }
       const n = await sendGroupInvites(ref.id, name, sel);
       toast('تم إنشاء المجموعة وإرسال ' + n + ' دعوة ✅'); show('s-home', false); openGroup(ref.id);
@@ -2088,11 +2104,11 @@ $('grSave').addEventListener('click', async () => {
       const fresh = sel.filter(id => !members.includes(id) && !oldInv[id]);
       const invites = {}; Object.keys(oldInv).forEach(id => { if (grSel[id] && !members.includes(id)) invites[id] = oldInv[id]; }); fresh.forEach(id => invites[id] = now);
       if (keep.length + Object.keys(invites).length > 50) { toast('الحد 50 عضو'); return; }
-      await fs.doc('chats/' + grEdit).update({ name, members: keep, invites, admins: (g.admins || []).filter(a => keep.includes(a)) });
+      await timed(fs.doc('chats/' + grEdit).update({ name, members: keep, invites, admins: (g.admins || []).filter(a => keep.includes(a)) }));
       const n = fresh.length ? await sendGroupInvites(grEdit, name, fresh) : 0;
       toast(n ? 'تم الحفظ وإرسال ' + n + ' دعوة' : 'تم حفظ المجموعة'); back();
     }
-  } catch (e) { console.error(e); toast('ما قدرنا نحفظ المجموعة: ' + permErr(e)); }
+  } catch (e) { console.error(e); toast('ما قدرنا نحفظ المجموعة: ' + (e?.code === 'permission-denied' ? permErr(e) : netMsg(e))); }
   finally { grBusy = false; $('grSave').disabled = false; }
 });
 $('grLeave').addEventListener('click', async () => {
@@ -2102,7 +2118,7 @@ $('grLeave').addEventListener('click', async () => {
   try {
     const upd = { members: firebase.firestore.FieldValue.arrayRemove(uid) };
     if ((g?.admins || []).includes(uid)) upd.admins = firebase.firestore.FieldValue.arrayRemove(uid);
-    await fs.doc('chats/' + grEdit).update(upd); lastChat = null; toast('طلعت من المجموعة'); show('s-home');
+    await timed(fs.doc('chats/' + grEdit).update(upd)); lastChat = null; toast('طلعت من المجموعة'); show('s-home');
   }
   catch (e) { console.error(e); toast('ما قدرنا نطلعك من المجموعة'); }
 });
