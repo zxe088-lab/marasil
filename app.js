@@ -2006,6 +2006,8 @@ async function openGroup(gid){
 let grEdit = null, grSel = {}, grBusy = false;
 // إدارة المجموعة: المالك يعيّن مديرين وينقل الملكية، والإضافة ترسل دعوة يقبلها العضو قبل ما ينضم
 const groupDoc = gid => gid ? (chatGroup === gid && curChat ? curChat : chats[gid]) : null;
+// تعيين المدير ونقل الملكية والدعوات تحتاج قواعد Firebase الجديدة (firestore-groups-rules.txt)؛ نخليها مقفلة لين تتحدث القواعد
+const GROUP_ADMIN_FEATURES = false;
 const isGroupAdmin = (g, id = uid) => !!g && (g.owner === id || (g.admins || []).includes(id));
 const groupRole = (g, id) => !g ? (id === uid ? ' (المالك)' : '') : g.owner === id ? ' (المالك)' : (g.admins || []).includes(id) ? ' (مدير)' : '';
 const permErr = e => e?.code === 'permission-denied' ? 'العملية مرفوضة من السيرفر (تحتاج تحديث قواعد Firebase)' : 'تأكد من الاتصال وحاول مرة ثانية';
@@ -2015,7 +2017,7 @@ function openGroupEditor(gid){
   $('grTitle').textContent = !g ? 'مجموعة جديدة' : manage ? 'إدارة المجموعة' : 'معلومات المجموعة';
   $('grName').value = g?.name || ''; $('grName').disabled = !manage;
   grSel = {}; (g?.members || []).forEach(m => { if (m !== uid) grSel[m] = true; }); Object.keys(g?.invites || {}).forEach(m => { grSel[m] = true; });
-  $('grSave').hidden = !manage; $('grSave').textContent = g ? 'حفظ التعديلات' : 'إنشاء المجموعة وإرسال الدعوات';
+  $('grSave').hidden = !manage; $('grSave').textContent = g ? 'حفظ التعديلات' : GROUP_ADMIN_FEATURES ? 'إنشاء المجموعة وإرسال الدعوات' : 'إنشاء المجموعة';
   $('grLeave').hidden = !g; $('grDelete').hidden = !g || g.owner !== uid;
   renderGroupMembers(); show('s-group');
 }
@@ -2035,7 +2037,7 @@ function renderGroupMembers(){
     if (manage && !locked) { const cb = el('input'); cb.type = 'checkbox'; cb.checked = !!grSel[id]; cb.addEventListener('change', () => { if (cb.checked) grSel[id] = true; else delete grSel[id]; grCount(); }); lab.append(cb); }
     lab.append(avatar(id, 'xs'), el('span', 'nm', nameOf(id) + groupRole(g, id) + (invited ? ' · مدعو (بانتظار القبول)' : '')));
     row.append(lab);
-    if (g && owner && isMember) {
+    if (GROUP_ADMIN_FEATURES && g && owner && isMember) {
       const acts = el('span', 'gr-acts');
       const isAdm = (g.admins || []).includes(id);
       const adm = el('button', 'mb', isAdm ? 'إلغاء المدير' : 'تعيين مدير'); adm.type = 'button';
@@ -2104,7 +2106,7 @@ $('grSave').addEventListener('click', async () => {
     if (!grEdit) {
       const ref = fs.collection('chats').doc(), invites = Object.fromEntries(sel.map(id => [id, now]));
       const base = { isGroup: true, name, owner: uid, admins: [], createdAt: now, lastTs: now, lastMsg: 'أُنشئت المجموعة', lastFrom: uid, lastKind: 'system', read: { [uid]: now } };
-      try { await timed(ref.set({ ...base, members: [uid], invites })); }
+      try { if (!GROUP_ADMIN_FEATURES) throw Object.assign(new Error('direct'), { code: 'permission-denied' }); await timed(ref.set({ ...base, members: [uid], invites })); }
       catch (e) {
         // قواعد Firebase القديمة تتطلب عضوين على الأقل: نضيف المختارين مباشرة
         if (e?.code !== 'permission-denied') throw e;
@@ -2115,7 +2117,8 @@ $('grSave').addEventListener('click', async () => {
     } else {
       const g = groupDoc(grEdit) || {}, members = g.members || [], oldInv = g.invites || {}, owner = g.owner === uid;
       const keep = members.filter(m => m === uid || m === g.owner || grSel[m] || (!owner && (g.admins || []).includes(m)));
-      const fresh = sel.filter(id => !members.includes(id) && !oldInv[id]);
+      const fresh = GROUP_ADMIN_FEATURES ? sel.filter(id => !members.includes(id) && !oldInv[id]) : [];
+      if (!GROUP_ADMIN_FEATURES) sel.forEach(id => { if (!keep.includes(id)) keep.push(id); });
       const invites = {}; Object.keys(oldInv).forEach(id => { if (grSel[id] && !members.includes(id)) invites[id] = oldInv[id]; }); fresh.forEach(id => invites[id] = now);
       if (keep.length + Object.keys(invites).length > 50) { toast('الحد 50 عضو'); return; }
       await timed(fs.doc('chats/' + grEdit).update({ name, members: keep, invites, admins: (g.admins || []).filter(a => keep.includes(a)) }));
