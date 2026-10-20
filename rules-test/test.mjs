@@ -2,7 +2,7 @@ import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebas
 import { readFileSync } from 'node:fs';
 import { doc, setDoc, updateDoc, deleteDoc, arrayUnion, arrayRemove, deleteField, getDoc } from 'firebase/firestore';
 const env = await initializeTestEnvironment({ projectId: 'demo-bpb', firestore: { rules: readFileSync('firestore.rules', 'utf8'), host: '127.0.0.1', port: 8080 } });
-const db = u => env.authenticatedContext(u).firestore();
+const dbs = {}; const db = u => (dbs[u] ||= env.authenticatedContext(u).firestore());
 let pass = 0, fail = 0;
 const t = async (name, p) => { try { await p; console.log('PASS', name); pass++; } catch (e) { console.log('FAIL', name, e.message); fail++; } };
 await env.withSecurityRulesDisabled(async c => { for (const u of ['A','B','C','D']) await setDoc(doc(c.firestore(), 'users/' + u), { name: u }); });
