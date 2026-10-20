@@ -31,3 +31,13 @@ test('sound: only allowed audio types with a matching signature and size',()=>{
  for(const data of [{},'data:audio/mp4;base64,????','data:video/mp4;base64,AAAA','data:audio/svg;base64,AAAA','data:audio/mp4;base64,'+Buffer.from('not audio at all').toString('base64')])assert.throws(()=>audioBytes(data),e=>e.status===400);
  assert.throws(()=>audioBytes('data:audio/mp4;base64,'+'A'.repeat(4.4*1024*1024)),e=>e.status===413);
 });
+test('story video: MP4/MOV only, signature checked, size bounded',()=>{
+ const {videoBytes}=require('../policy');
+ const mp4=Buffer.concat([Buffer.from([0,0,0,24]),Buffer.from('ftypisom'),Buffer.alloc(64)]);
+ const ok=videoBytes('data:video/mp4;base64,'+mp4.toString('base64'));
+ assert.equal(ok.type,'video/mp4');assert.equal(ok.bytes.length,mp4.length);
+ assert.equal(videoBytes('data:video/quicktime;base64,'+mp4.toString('base64')).type,'video/quicktime');
+ assert.throws(()=>videoBytes('data:video/webm;base64,'+mp4.toString('base64')));
+ assert.throws(()=>videoBytes('data:video/mp4;base64,'+Buffer.from('not a video at all').toString('base64')));
+ assert.throws(()=>videoBytes(42));
+});

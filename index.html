@@ -109,12 +109,16 @@
     <div class="bluebar plain"><span class="bb-title">إضافة جهة اتصال</span><button type="button" class="top-back" data-back aria-label="رجوع"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M15 4l-8 8 8 8" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
     <form class="panel" id="addForm">
       <div class="card">
-        <label class="lbl" for="addPin">رمز PIN:</label>
-        <input id="addPin" class="pininput" maxlength="8" placeholder="2B4F9A1C" autocomplete="off" autocapitalize="characters">
+        <label class="lbl" for="addPin">إضافة بالكود (PIN):</label>
+        <div class="line"><input id="addPin" class="pininput" maxlength="40" placeholder="2B4F9A1C" autocomplete="off" autocapitalize="characters" inputmode="text"><button type="button" class="btn" id="pastePin">لصق</button></div>
         <label class="lbl" for="addCat">الفئة:</label>
         <div class="line"><select id="addCat"></select><button type="button" class="btn" id="addCatBtn">فئة جديدة</button></div>
       </div>
-      <button type="submit" class="btn primary">إرسال دعوة وإضافة</button>
+      <button type="submit" class="btn primary">إرسال طلب إضافة</button>
+      <div class="card my-pin-card">
+        <span class="lbl">كودك:</span> <span class="pin val" id="addMyPin"></span>
+        <div class="line"><button type="button" class="btn" id="addCopyMine">نسخ كودي</button><button type="button" class="btn" id="addShareMine">مشاركة</button></div>
+      </div>
     </form>
     <div class="spacer"></div>
   </div>
@@ -289,9 +293,10 @@
         <div id="msgInput" class="message-editor" contenteditable="true" role="textbox" aria-label="الرسالة" aria-multiline="true" data-placeholder="أدخل رسالة" enterkeyhint="send" spellcheck="true"></div>
         <button type="button" id="faceBtn" class="composer-face" aria-label="فيسات" aria-expanded="false" aria-controls="facePanel"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="9" cy="9" r=".7"/><circle cx="15" cy="9" r=".7"/><path d="M8 14q4 5 8 0"/></svg></button>
       </div>
-      <button type="button" id="cameraBtn" class="composer-camera" aria-label="صورة تُعرض مرة واحدة"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h4l2-3h6l2 3h4v13H3z"/><circle cx="12" cy="13" r="4"/></svg></button>
+      <button type="button" id="cameraBtn" class="composer-camera" aria-label="إرفاق صورة"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h4l2-3h6l2 3h4v13H3z"/><circle cx="12" cy="13" r="4"/></svg></button>
       <button type="button" id="voiceSendBtn" class="composer-voice" aria-label="تسجيل صوتي"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M6 11v2a6 6 0 0 0 12 0v-2M12 19v3"/></svg></button>
       <input id="chatCameraInput" type="file" accept="image/*" capture="environment" hidden>
+      <input id="chatPhotoInput" type="file" accept="image/*" hidden>
     </form>
     <div id="voiceDraft" class="voice-draft" hidden></div>
   </div>

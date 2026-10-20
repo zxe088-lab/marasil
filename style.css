@@ -539,3 +539,21 @@ form.composer .composer-write input{flex:1;width:0;min-width:0;border:0;backgrou
 @font-face{font-family:'Story Baloo';src:url('fonts/story-baloo-bhaijaan-2.woff2') format('woff2');font-weight:700;font-display:swap}
 @font-face{font-family:'Story Harmattan';src:url('fonts/story-harmattan.woff2') format('woff2');font-weight:700;font-display:swap}
 @font-face{font-family:'Story Mirza';src:url('fonts/story-mirza.woff2') format('woff2');font-weight:700;font-display:swap}
+/* الستوري: الإطار يختفي بعد المشاهدة، وفيديو الستوري */
+.stories-strip .story-circle .story-ring.seen{background:#c3cad1}
+.story-modal .story-stage .story-video{display:block;width:100%;max-height:70vh;object-fit:contain;background:#000;border-radius:6px}
+.story-modal.viewing .story-stage .story-video{position:absolute;inset:0;width:100%;height:100%;max-height:none;object-fit:cover;border-radius:0}
+.story-tools button.primary{background:#7b2cbf;color:#fff;border-color:#5a1f8f}
+/* PIN قابل للنسخ داخل الرسائل */
+.pin-chip{display:inline;border:0;border-bottom:1px dashed currentColor;background:rgba(0,140,211,.1);color:#006fa8;font:inherit;font-weight:700;letter-spacing:1px;padding:0 3px;margin:0 1px;border-radius:3px;cursor:pointer;direction:ltr;unicode-bidi:isolate}
+.mine .pin-chip{color:#004f78}
+#pfPin{cursor:pointer}
+.my-pin-card{margin-top:14px}.my-pin-card .pin{font-size:18px;direction:ltr;unicode-bidi:isolate}.my-pin-card .line{margin-top:8px;gap:8px}
+#s-add .line .pininput{flex:1;min-width:0}
+/* صور الدردشة */
+.txt.photo-message{display:block}.chat-photo{display:block;max-width:min(240px,62vw);max-height:300px;border-radius:8px;border:1px solid #c9d1d8;margin:3px 0;cursor:zoom-in;object-fit:cover;background:#eef2f5}
+.photo-view{position:fixed;inset:0;z-index:1200;background:rgba(0,0,0,.94);display:flex;align-items:center;justify-content:center;padding:calc(env(safe-area-inset-top,0px) + 40px) 8px calc(env(safe-area-inset-bottom,0px) + 20px)}.photo-view[hidden]{display:none}.photo-view img{max-width:100%;max-height:100%;object-fit:contain}.photo-view .pv-close{position:absolute;top:calc(env(safe-area-inset-top,0px) + 8px);right:12px;border:0;background:transparent;color:#fff;font-size:36px;line-height:1}
+.sheet{position:fixed;inset:0;z-index:1300;background:rgba(0,0,0,.35);display:flex;align-items:flex-end;justify-content:center}.sheet-box{width:100%;max-width:480px;background:#f4f6f8;border-radius:14px 14px 0 0;padding:12px 12px calc(env(safe-area-inset-bottom,0px) + 12px);display:flex;flex-direction:column;gap:8px}.sheet-title{text-align:center;color:#5b6b78;font-size:14px;padding:4px 0}.sheet-box .btn{width:100%}
+/* إدارة المجموعة والدعوات */
+.gr-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.gr-row .gr-pick{display:flex;align-items:center;gap:8px;flex:1;min-width:150px}.gr-acts{display:flex;gap:6px;margin-inline-start:auto}.gr-acts .mb{padding:5px 8px;border:1px solid #8e969c;border-radius:3px;background:linear-gradient(#fff,#e1e4e6);font-size:12px}
+.txt.group-invite{display:block}.group-invite .gi-acts{display:flex;gap:8px;margin-top:6px}.group-invite .btn.sm{padding:6px 14px;font-size:14px}

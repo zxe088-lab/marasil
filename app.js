@@ -93,6 +93,30 @@ function toast(t){ const e = $('toast'); e.textContent = t; e.hidden = false; cl
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 // رمز PIN: 8 خانات يبدأ بـ 2A ثم 6 خانات عشوائية
 const newPin = () => '2A' + Array.from(crypto.getRandomValues(new Uint8Array(3)), b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+// التعرّف على رمز PIN داخل أي نص: 8 خانات (أرقام وحروف إنجليزية) فيها رقم واحد على الأقل
+const PIN_RE = /(^|[^0-9A-Za-z])([0-9A-Za-z]{8})(?![0-9A-Za-z])/g;
+const isPinLike = t => /^[0-9A-Z]{8}$/.test(t) && /[0-9]/.test(t);
+function extractPin(text){ for (const m of String(text || '').matchAll(PIN_RE)) { const p = m[2].toUpperCase(); if (isPinLike(p)) return p; } return ''; }
+let lastCopiedPin = '', lastCopiedAt = 0;
+async function copyPinText(pin){
+  lastCopiedPin = pin; lastCopiedAt = Date.now();
+  try { await navigator.clipboard.writeText(pin); toast('تم نسخ ' + pin + ' · الصقه في «إضافة»'); }
+  catch { toast('رمز PIN: ' + pin); }
+}
+// يحوّل أي PIN داخل النص لزر ينسخ بالضغط
+function linkPins(text){
+  const frag = document.createDocumentFragment(), s = String(text || ''); let last = 0;
+  for (const m of s.matchAll(PIN_RE)) {
+    const pin = m[2].toUpperCase(); if (!isPinLike(pin)) continue;
+    const start = m.index + m[1].length;
+    if (start > last) frag.append(document.createTextNode(s.slice(last, start)));
+    const b = el('button', 'pin-chip', m[2]); b.type = 'button'; b.title = 'اضغط لنسخ رمز PIN';
+    b.addEventListener('click', e => { e.stopPropagation(); copyPinText(pin); });
+    frag.append(b); last = start + 8;
+  }
+  if (last < s.length) frag.append(document.createTextNode(s.slice(last)));
+  return frag;
+}
 const fmtTime = (ts, tz) => new Date(ts).toLocaleTimeString('ar-SA', { hour: 'numeric', minute: '2-digit', ...(tz ? { timeZone: tz } : {}) });
 const fmtDay = ts => new Date(ts).toLocaleDateString('ar-SA-u-ca-gregory', { weekday: 'long', day: 'numeric', month: 'long' });
 function ago(ts){
@@ -134,6 +158,13 @@ function statusLabel(d){ return (d?.stText || '').trim() || (d?.busy ? 'مشغو
 function statusText(id){ const d = dataOf(id); return d?.busy || isOnline(id) || id === uid ? statusLabel(d) : 'غير متصل'; }
 
 /* ---------- النغمات والاهتزاز ---------- */
+// احترام زر الصامت في الآيفون: جلسة الصوت "ambient" تخلي نغمات التطبيق تنكتم مع الصامت وما توقف موسيقى الجوال
+function audioSessionType(type){ try { if (navigator.audioSession && navigator.audioSession.type !== type) navigator.audioSession.type = type; } catch {} }
+audioSessionType('ambient');
+document.addEventListener('visibilitychange', () => { if (!document.hidden && !document.querySelector('audio.chat-audio:not([data-done])')) audioSessionType('ambient'); });
+// الرسائل الصوتية يشغّلها الشخص بنفسه، فتشتغل حتى مع الصامت ثم نرجع للوضع العادي
+document.addEventListener('play', e => { if (e.target?.classList?.contains('chat-audio')) { delete e.target.dataset.done; audioSessionType('playback'); } }, true);
+['pause', 'ended'].forEach(ev => document.addEventListener(ev, e => { if (e.target?.classList?.contains('chat-audio')) { e.target.dataset.done = '1'; audioSessionType('ambient'); } }, true));
 let actx = null;
 function audio(){ if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch {} } if (actx?.state === 'suspended') actx.resume(); return actx; }
 ['pointerdown', 'touchend', 'keydown'].forEach(ev => document.addEventListener(ev, audio, { capture: true, passive: true }));
@@ -349,11 +380,11 @@ const buzz = pattern => {
     if (Haptics) {
       // الآيفون: الاهتزاز العادي ما يشتغل إذا الجوال على الصامت، فنضيف نبضات Taptic قوية تشتغل حتى بالصامت
       const pulses = Array.isArray(pattern) ? pattern : [pattern];
-      Haptics.vibrate?.({ duration: 300 })?.catch?.(() => {});
+      Haptics.vibrate?.({ duration: Math.min(1000, pulses[0] || 300) })?.catch?.(() => {});
       let t = 0;
       pulses.forEach((d, i) => {
-        if (i % 2 === 0) for (let k = 0, n = Math.max(1, Math.round(d / 110)); k < n; k++)
-          setTimeout(() => { Haptics.impact?.({ style: 'HEAVY' })?.catch?.(() => {}); }, t + k * 110);
+        if (i % 2 === 0) for (let k = 0, n = Math.max(1, Math.round(d / 70)); k < n; k++)
+          setTimeout(() => { Haptics.impact?.({ style: 'HEAVY' })?.catch?.(() => {}); }, t + k * 70);
         t += d;
       });
       return;
@@ -368,8 +399,10 @@ function ledFlash(){
   l.classList.remove('on'); void l.offsetWidth; l.classList.add('on');
   clearTimeout(ledTimer); ledTimer = setTimeout(() => l.classList.remove('on'), 1600);
 }
+// الوكزة: نبضات متتابعة واضحة (تشتغل حتى والجوال على الصامت، بدون صوت)
 function nudgeEffect(){
-  buzz([400, 100, 400, 100, 400, 100, 800]);
+  try { Haptics?.notification?.({ type: 'WARNING' })?.catch?.(() => {}); } catch {}
+  buzz([350, 90, 350, 90, 350, 90, 350, 90, 700]);
 }
 
 /* ---------- التنقل ---------- */
@@ -1072,10 +1105,39 @@ function fillCatSelect(sel, value){
   (me.cats || [DEFAULT_CAT]).forEach(c => { const o = el('option', '', catLabel(c)); o.value = c; sel.append(o); });
   sel.value = value || DEFAULT_CAT;
 }
-$('addContactBtn').addEventListener('click', () => { fillCatSelect($('addCat')); $('addPin').value = ''; show('s-add'); setTimeout(() => $('addPin').focus(), 50); });
+$('addContactBtn').addEventListener('click', () => {
+  fillCatSelect($('addCat'));
+  // إذا نسخت PIN قبل شوي نحطه جاهز
+  $('addPin').value = lastCopiedPin && lastCopiedPin !== me?.pin && Date.now() - lastCopiedAt < 10 * 60 * 1000 ? lastCopiedPin : '';
+  $('addMyPin').textContent = me?.pin || '';
+  show('s-add'); setTimeout(() => $('addPin').focus(), 50);
+});
+$('addPin').addEventListener('input', () => {
+  const v = $('addPin').value, up = v.toUpperCase();
+  if (up !== v || /[^0-9A-Z]/.test(up)) { const p = extractPin(v) || up.replace(/[^0-9A-Z]/g, '').slice(0, 8); $('addPin').value = p; }
+});
+$('addPin').addEventListener('paste', e => {
+  const t = e.clipboardData?.getData('text') || ''; const p = extractPin(t);
+  if (p) { e.preventDefault(); $('addPin').value = p; toast('تعرّفنا على الرمز ' + p); }
+});
+$('pastePin').addEventListener('click', async () => {
+  let t = '';
+  try { t = await navigator.clipboard.readText(); } catch {}
+  const p = extractPin(t) || (Date.now() - lastCopiedAt < 30 * 60 * 1000 ? lastCopiedPin : '');
+  if (!p) { toast('ما لقينا رمز PIN في الحافظة'); $('addPin').focus(); return; }
+  $('addPin').value = p; toast('تم لصق ' + p);
+});
+$('addCopyMine').addEventListener('click', () => me?.pin && copyPinText(me.pin));
+$('addShareMine').addEventListener('click', async () => {
+  if (!me?.pin) return;
+  const text = 'أضفني في BPB OLD برمز PIN: ' + me.pin;
+  try { if (navigator.share) { await navigator.share({ text }); return; } } catch (e) { if (e?.name === 'AbortError') return; }
+  try { await navigator.clipboard.writeText(text); toast('تم نسخ رسالة المشاركة'); } catch { toast(text); }
+});
+$('pfPin').addEventListener('click', () => { const p = $('pfPin').textContent.trim(); if (p) copyPinText(p); });
 $('addForm').addEventListener('submit', async e => {
   e.preventDefault();
-  const pin = $('addPin').value.trim().toUpperCase();
+  const pin = extractPin($('addPin').value) || $('addPin').value.trim().toUpperCase();
   if (!/^[0-9A-Z]{8}$/.test(pin)) { toast('رمز PIN لازم يكون 8 خانات (أرقام وحروف إنجليزية)'); return; }
   if (pin === me.pin) { toast('هذا رمزك أنت'); return; }
   try {
@@ -1145,7 +1207,7 @@ function renderProfile(){
   $('pfPinSmall').textContent = d.pin || '';
   $('pfName').textContent = d.name || '';
   $('pfPin').textContent = d.pin || '';
-  $('pfMsg').textContent = d.msg || '';
+  $('pfMsg').replaceChildren(linkPins(d.msg || ''));
   $('pfStatus').replaceChildren(statusIcon(id), ' ', statusText(id));
   $('pfFlag').textContent = flagOf(d.country) + ' ' + countryName(d.country);
   $('pfTz').textContent = d.tz ? (d.tz.split('/').pop().replace(/_/g, ' ') + ' (' + tzOffset(d.tz) + ')') : '';
@@ -1233,7 +1295,7 @@ $('stAdd').addEventListener('click', () => {
   $('stNew').value = '';
   saveMe({ statuses: list, stText: t, busy }, 'status', 'حالتك: ' + t);
 });
-$('copyPin').addEventListener('click', async () => { try { await navigator.clipboard.writeText(me.pin); toast('تم نسخ رمز PIN'); } catch { toast('رمزك: ' + me.pin); } });
+$('copyPin').addEventListener('click', () => me?.pin && copyPinText(me.pin));
 // تغيير رمز PIN: نحجز الرمز الجديد، نحدّث الملف، ثم نحذف القديم
 async function changePin(pin){
   pin = pin.toUpperCase();
@@ -1311,13 +1373,16 @@ async function openChat(peer){
   try { await fs.doc('chats/' + id).set({ members: [uid, peer].sort() }, { merge: true }); }
   catch (e) { console.error(e); toast('ما قدرنا نفتح الدردشة'); return; }
   show('s-chat');
+  // نوقف مستمعات الدردشة السابقة (قروب أو خاص) عشان ما تطغى رسائلها على هذي الدردشة
+  unsubMsgs?.(); unsubChat?.(); unsubMsgs = unsubChat = null;
   chatId = id; chatPeer = peer; chatGroup = null; lastChat = { id: peer, group: false }; msgs = []; curChat = null; firstMsgsSnap = true;
   watchUser(peer); renderChatHead();
   $('msgList').replaceChildren(el('div', 'empty', 'جاري التحميل…'));
-  unsubChat = fs.doc('chats/' + id).onSnapshot(s => { const k = msgsKey(curChat); curChat = s.data() || {}; if (msgsKey(curChat) !== k) renderMsgsSoon(); renderTyping(); });
+  unsubChat = fs.doc('chats/' + id).onSnapshot(s => { if (chatId !== id) return; const k = msgsKey(curChat); curChat = s.data() || {}; if (msgsKey(curChat) !== k) renderMsgsSoon(); renderTyping(); });
   cleanExpiredMessages(id);
   unsubMsgs = fs.collection('chats/' + id + '/messages').where('ts','>',Date.now()-MESSAGE_LIFETIME).orderBy('ts', 'desc').limit(30)
     .onSnapshot({ includeMetadataChanges: true }, s => {
+      if (chatId !== id) return;
       msgs = s.docs.map(d => ({ id: d.id, pending: d.metadata.hasPendingWrites, ...d.data() })).reverse();
       if (!firstMsgsSnap) {
         const fresh = s.docChanges().filter(c => c.type === 'added' && c.doc.data().from !== uid && !arrivedWhileAway(c.doc.data().ts));
@@ -1337,7 +1402,7 @@ function renderChatHead(){
     $('chStatus').className = 'st-icon group';
     $('chMsg').textContent = others.length ? 'أنت، ' + others.slice(0, 4).map(nameOf).join('، ') + (others.length > 4 ? ' و' + (others.length - 4) + ' غيرهم' : '') : 'أنت فقط';
     const out = g.members && !g.members.includes(uid);
-    $('composer').hidden = !!out; $('pingBtn').hidden = !!out; $('cameraBtn').hidden = true; updateComposer();
+    $('composer').hidden = !!out; $('pingBtn').hidden = !!out; $('cameraBtn').hidden = !!out; updateComposer();
     $('blockedBar').hidden = true;
     return;
   }
@@ -1394,7 +1459,7 @@ function renderMsgs(fromMsgs){
     if(m.kind === 'story-reply' && window.BPBStories) { window.BPBStories.renderReply(m, txt); }
     else if(m.kind === 'richtext' && Array.isArray(m.parts)) {
       for(const part of m.parts.slice(0,128)){
-        if(typeof part.text==='string') txt.append(document.createTextNode(part.text));
+        if(typeof part.text==='string') txt.append(linkPins(part.text));
         else if(Number.isInteger(part.sticker)&&part.sticker>=0&&part.sticker<48) txt.append(stickerFace(part.sticker));
       }
     }
@@ -1412,8 +1477,22 @@ function renderMsgs(fromMsgs){
       button.type = 'button'; button.disabled = !!m.opened || mine;
       const targetChat = chatId; button.onclick = () => openOncePhoto(targetChat, m.id, button); txt.append(button);
     }
+    else if (m.kind === 'photo' && typeof m.image === 'string' && /^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/.test(m.image)) {
+      const im = el('img', 'chat-photo'); im.alt = 'صورة'; im.loading = 'lazy'; im.src = m.image;
+      im.addEventListener('click', () => viewPhoto(m.image)); txt.classList.add('photo-message'); txt.append(im);
+    }
+    else if (m.kind === 'group-invite' && typeof m.gid === 'string') {
+      txt.classList.add('group-invite');
+      txt.append(el('span', 'gi-text', '👥 ' + (mine ? 'أرسلت دعوة للانضمام إلى «' : 'دعوة للانضمام إلى «') + (m.gname || 'مجموعة') + '»'));
+      if (!mine) {
+        const joined = !!chats[m.gid] && (chats[m.gid].members || []).includes(uid), acts = el('span', 'gi-acts');
+        if (joined) { const o = el('button', 'btn sm', 'فتح المجموعة'); o.type = 'button'; o.onclick = () => openGroup(m.gid); acts.append(o); }
+        else { const y = el('button', 'btn primary sm', 'قبول'), n = el('button', 'btn sm', 'رفض'); y.type = n.type = 'button'; y.onclick = () => answerGroupInvite(m.gid, true, y); n.onclick = () => answerGroupInvite(m.gid, false, n); acts.append(y, n); }
+        txt.append(acts);
+      }
+    }
     else if (m.kind === 'ping') { txt.classList.add('ping-text'); txt.textContent = 'PING!!!'; }
-    else txt.append(m.text || '');
+    else txt.append(linkPins(m.text || ''));
     line.append(mark, txt);
     card.firstChild.append(line);
   });
@@ -1450,7 +1529,7 @@ async function sendMsg(data, expectedChat = chatId){
   const messageData={from:uid,ts,kind:'text',...data,expiresAt};
   if(data.kind==='voice'){delete messageData.audio;b.set(fs.doc('chats/'+id+'/voiceClips/'+message.id),{from:uid,audio:data.audio,expiresAt});}
   b.set(message,messageData);
-  b.update(fs.doc('chats/' + id), { lastMsg: data.kind === 'ping' ? 'PING!!!' : data.kind === 'voice' ? 'رسالة صوتية' : data.kind === 'sticker' ? 'فيس بلاك بيري' : (data.text || '').slice(0, 80), lastTs: ts, lastFrom: uid, lastKind: data.kind || 'text', ['read.' + uid]: ts, ['typing.' + uid]: 0 });
+  b.update(fs.doc('chats/' + id), { lastMsg: data.kind === 'ping' ? 'PING!!!' : data.kind === 'voice' ? 'رسالة صوتية' : data.kind === 'sticker' ? 'فيس بلاك بيري' : data.kind === 'photo' ? '📷 صورة' : data.kind === 'group-invite' ? '👥 دعوة لمجموعة «' + (data.gname || '') + '»' : (data.text || '').slice(0, 80), lastTs: ts, lastFrom: uid, lastKind: data.kind || 'text', ['read.' + uid]: ts, ['typing.' + uid]: 0 });
   if (data.kind === 'ping') nudgeEffect(); // الإرسال بدون صوت؛ الوكزة تهز جوال المرسل بس
   try { await b.commit(); notifyPush(id); return true; }
   catch (e) { console.error(e); toast('ما وصلت الرسالة، تأكد من الاتصال'); return false; }
@@ -1552,7 +1631,50 @@ async function cleanExpiredMessages(id){
   } catch(error){console.warn('Message cleanup unavailable',error.code);}
 }
 $('voiceSendBtn').onclick=()=>{if(voiceState?.recorder?.state==='recording')voiceState.recorder.stop();else if($('voiceSendBtn').dataset.mode==='send')sendText();else startVoice();};
-$('cameraBtn').onclick=()=>{if(chatId&&!$('composer').hidden)$('chatCameraInput').click();};
+$('cameraBtn').onclick=async()=>{
+  if(!chatId||$('composer').hidden)return;
+  if(chatGroup){$('chatPhotoInput').click();return;}
+  const pick=await chooseSheet('إرفاق صورة',[['photo','📷 صورة'],['once','👁 صورة لمرة واحدة']]);
+  if(pick==='photo')$('chatPhotoInput').click(); else if(pick==='once')$('chatCameraInput').click();
+};
+$('chatPhotoInput').onchange=()=>{const file=$('chatPhotoInput').files[0];$('chatPhotoInput').value='';if(file)sendPhoto(file);};
+// قائمة اختيار بسيطة من الأسفل
+function chooseSheet(title, options){
+  return new Promise(resolve => {
+    const wrap = el('div', 'sheet'), box = el('div', 'sheet-box');
+    box.append(el('div', 'sheet-title', title));
+    const done = v => { wrap.remove(); resolve(v); };
+    options.forEach(([v, label, cls]) => { const b = el('button', 'btn' + (cls ? ' ' + cls : ''), label); b.type = 'button'; b.onclick = () => done(v); box.append(b); });
+    const c = el('button', 'btn', 'إلغاء'); c.type = 'button'; c.onclick = () => done(null); box.append(c);
+    wrap.append(box); wrap.addEventListener('click', e => { if (e.target === wrap) done(null); });
+    document.body.append(wrap);
+  });
+}
+// إرسال صورة عادية في الدردشة (خاص أو مجموعة): نصغّرها ونحفظها داخل الرسالة
+async function sendPhoto(file){
+  if(photoBusy || !chatId || $('composer').hidden) return;
+  if(!file.type.startsWith('image/') || file.size>25000000){toast('اختر صورة بحجم أقل من 25 ميجابايت');return;}
+  photoBusy=true; const id=chatId; let objectUrl; toast('جاري إرسال الصورة…');
+  try {
+    objectUrl=URL.createObjectURL(file);const image=new Image();image.src=objectUrl;await image.decode();
+    let payload='';
+    for(const [max,q] of [[1280,.72],[1080,.6],[900,.5],[720,.45]]){
+      const scale=Math.min(1,max/Math.max(image.width,image.height)),canvas=document.createElement('canvas');
+      canvas.width=Math.max(1,Math.round(image.width*scale));canvas.height=Math.max(1,Math.round(image.height*scale));
+      const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(image,0,0,canvas.width,canvas.height);
+      payload=canvas.toDataURL('image/jpeg',q); if(payload.length<=700000) break;
+    }
+    if(payload.length>700000) throw new Error('Photo too large');
+    if(id!==chatId || $('composer').hidden) return;
+    await sendMsg({kind:'photo',image:payload}, id);
+  } catch(error){console.error(error);toast('تعذّر إرسال الصورة، جرّب صورة ثانية');}
+  finally {if(objectUrl)URL.revokeObjectURL(objectUrl);photoBusy=false;}
+}
+function viewPhoto(src){
+  let v=$('photoView');
+  if(!v){ v=el('div','photo-view'); v.id='photoView'; v.setAttribute('role','dialog'); v.setAttribute('aria-label','صورة'); const im=el('img'); im.alt='صورة'; const x=el('button','pv-close','×'); x.type='button'; x.setAttribute('aria-label','إغلاق'); v.append(im,x); v.addEventListener('click',e=>{ if(e.target!==im){ v.hidden=true; im.removeAttribute('src'); } }); document.body.append(v); }
+  v.querySelector('img').src=src; v.hidden=false;
+}
 $('chatCameraInput').onchange=()=>{const file=$('chatCameraInput').files[0];$('chatCameraInput').value='';if(file)sendOncePhoto(file);};
 $('closeOnceViewer').onclick=closeOncePhoto;
 document.addEventListener('visibilitychange',()=>{if(document.hidden){cancelVoice();closeOncePhoto();updateComposer();}});
@@ -1670,9 +1792,10 @@ $('msgInput').addEventListener('input', () => {
   typingSent = Date.now();
   fs.doc('chats/' + chatId).update({ ['typing.' + uid]: typingSent }).catch(() => {});
 });
+// وكزات متتالية بدون انتظار (نتجاهل بس الضغطة المكررة بالغلط خلال ربع ثانية)
 let lastPing = 0;
 $('pingBtn').addEventListener('click', () => {
-  if (Date.now() - lastPing < 5000) { toast('استنى شوي قبل الوكزة الثانية'); return; }
+  if (Date.now() - lastPing < 250) return;
   lastPing = Date.now(); sendMsg({ kind: 'ping' });
 });
 
@@ -1822,11 +1945,13 @@ function groupAvatar(id, size = ''){
 async function openGroup(gid){
   if (chatId === gid && !$('s-chat').hidden) return;
   show('s-chat');
+  unsubMsgs?.(); unsubChat?.(); unsubMsgs = unsubChat = null;
   chatId = gid; chatPeer = null; chatGroup = gid; lastChat = { id: gid, group: true }; msgs = []; curChat = chats[gid] || {}; firstMsgsSnap = true;
   (curChat.members || []).forEach(m => m !== uid && watchUser(m));
   renderChatHead();
   $('msgList').replaceChildren(el('div', 'empty', 'جاري التحميل…'));
   unsubChat = fs.doc('chats/' + gid).onSnapshot(s => {
+    if (chatId !== gid) return;
     if (!s.exists) { toast('المجموعة انحذفت'); lastChat = null; show('s-home'); return; }
     const k = msgsKey(curChat); curChat = s.data() || {};
     if (!(curChat.members || []).includes(uid)) { toast('ما عدت عضو في هذي المجموعة'); lastChat = null; show('s-home'); return; }
@@ -1837,6 +1962,7 @@ async function openGroup(gid){
   cleanExpiredMessages(gid);
   unsubMsgs = fs.collection('chats/' + gid + '/messages').where('ts','>',Date.now()-MESSAGE_LIFETIME).orderBy('ts', 'desc').limit(30)
     .onSnapshot({ includeMetadataChanges: true }, s => {
+      if (chatId !== gid) return;
       msgs = s.docs.map(d => ({ id: d.id, pending: d.metadata.hasPendingWrites, ...d.data() })).reverse();
       if (!firstMsgsSnap) {
         const fresh = s.docChanges().filter(c => c.type === 'added' && c.doc.data().from !== uid && !isBlocked(c.doc.data().from) && !arrivedWhileAway(c.doc.data().ts));
@@ -1848,55 +1974,136 @@ async function openGroup(gid){
 }
 
 let grEdit = null, grSel = {}, grBusy = false;
+// إدارة المجموعة: المالك يعيّن مديرين وينقل الملكية، والإضافة ترسل دعوة يقبلها العضو قبل ما ينضم
+const groupDoc = gid => gid ? (chatGroup === gid && curChat ? curChat : chats[gid]) : null;
+const isGroupAdmin = (g, id = uid) => !!g && (g.owner === id || (g.admins || []).includes(id));
+const groupRole = (g, id) => !g ? (id === uid ? ' (المالك)' : '') : g.owner === id ? ' (المالك)' : (g.admins || []).includes(id) ? ' (مدير)' : '';
+const permErr = e => e?.code === 'permission-denied' ? 'العملية مرفوضة من السيرفر (تحتاج تحديث قواعد Firebase)' : 'تأكد من الاتصال وحاول مرة ثانية';
 function openGroupEditor(gid){
   grEdit = gid || null;
-  const g = gid ? (chatGroup === gid && curChat ? curChat : chats[gid]) : null, owner = !g || g.owner === uid;
-  $('grTitle').textContent = !g ? 'مجموعة جديدة' : owner ? 'إدارة المجموعة' : 'معلومات المجموعة';
-  $('grName').value = g?.name || ''; $('grName').disabled = !owner;
-  grSel = {}; (g?.members || []).forEach(m => { if (m !== uid) grSel[m] = true; });
-  $('grSave').hidden = !owner; $('grSave').textContent = g ? 'حفظ التعديلات' : 'إنشاء المجموعة';
-  $('grLeave').hidden = !g || owner; $('grDelete').hidden = !g || !owner;
+  const g = groupDoc(gid), manage = !g || isGroupAdmin(g);
+  $('grTitle').textContent = !g ? 'مجموعة جديدة' : manage ? 'إدارة المجموعة' : 'معلومات المجموعة';
+  $('grName').value = g?.name || ''; $('grName').disabled = !manage;
+  grSel = {}; (g?.members || []).forEach(m => { if (m !== uid) grSel[m] = true; }); Object.keys(g?.invites || {}).forEach(m => { grSel[m] = true; });
+  $('grSave').hidden = !manage; $('grSave').textContent = g ? 'حفظ التعديلات' : 'إنشاء المجموعة وإرسال الدعوات';
+  $('grLeave').hidden = !g; $('grDelete').hidden = !g || g.owner !== uid;
   renderGroupMembers(); show('s-group');
 }
 function renderGroupMembers(){
-  const g = grEdit ? chats[grEdit] : null, owner = !g || g.owner === uid, list = $('grList'); list.replaceChildren();
-  const ids = [...new Set([...Object.keys(contacts).filter(id => !gone[id] && !isBlocked(id)), ...(g?.members || []).filter(m => m !== uid)])]
-    .filter(id => owner || (g?.members || []).includes(id)).sort((a, b) => nameOf(a).localeCompare(nameOf(b), 'ar'));
-  const me1 = el('div', 'bc-row'); me1.append(avatar(uid, 'xs'), el('span', 'nm', 'أنت' + ((!g || g.owner === uid) ? ' (المالك)' : '')));
+  const g = groupDoc(grEdit), manage = !g || isGroupAdmin(g), owner = !g || g.owner === uid, list = $('grList'); list.replaceChildren();
+  const members = g?.members || [], invites = g?.invites || {};
+  const ids = [...new Set([...(manage ? Object.keys(contacts).filter(id => !gone[id] && !isBlocked(id)) : []), ...members, ...(manage ? Object.keys(invites) : [])])]
+    .filter(id => id !== uid).sort((a, b) => (members.includes(b) - members.includes(a)) || nameOf(a).localeCompare(nameOf(b), 'ar'));
+  const me1 = el('div', 'bc-row'); me1.append(avatar(uid, 'xs'), el('span', 'nm', 'أنت' + groupRole(g, uid)));
   list.append(me1);
-  if (!ids.length) list.append(el('div', 'empty', 'أضف أصدقاء أول عشان تقدر تضيفهم للمجموعة.'));
+  if (!ids.length) list.append(el('div', 'empty', 'أضف أصدقاء أول عشان تقدر تدعوهم للمجموعة.'));
   ids.forEach(id => {
-    const row = el(owner ? 'label' : 'div', 'bc-row');
-    if (owner) { const cb = el('input'); cb.type = 'checkbox'; cb.checked = !!grSel[id]; cb.addEventListener('change', () => { if (cb.checked) grSel[id] = true; else delete grSel[id]; grCount(); }); row.append(cb); }
-    row.append(avatar(id, 'xs'), el('span', 'nm', nameOf(id) + (g?.owner === id ? ' (المالك)' : '')));
+    const isMember = members.includes(id), invited = !!invites[id] && !isMember, row = el('div', 'bc-row gr-row');
+    // المدير ما يقدر يشيل المالك أو مدير ثاني
+    const locked = g && (id === g.owner || (!owner && (g.admins || []).includes(id)));
+    const lab = el('label', 'gr-pick');
+    if (manage && !locked) { const cb = el('input'); cb.type = 'checkbox'; cb.checked = !!grSel[id]; cb.addEventListener('change', () => { if (cb.checked) grSel[id] = true; else delete grSel[id]; grCount(); }); lab.append(cb); }
+    lab.append(avatar(id, 'xs'), el('span', 'nm', nameOf(id) + groupRole(g, id) + (invited ? ' · مدعو (بانتظار القبول)' : '')));
+    row.append(lab);
+    if (g && owner && isMember) {
+      const acts = el('span', 'gr-acts');
+      const isAdm = (g.admins || []).includes(id);
+      const adm = el('button', 'mb', isAdm ? 'إلغاء المدير' : 'تعيين مدير'); adm.type = 'button';
+      adm.onclick = () => setGroupAdmin(id, !isAdm);
+      const tr = el('button', 'mb', 'نقل الملكية'); tr.type = 'button'; tr.onclick = () => transferGroup(id);
+      acts.append(adm, tr); row.append(acts);
+    }
     list.append(row);
   });
   grCount();
 }
 function grCount(){ $('grCount').textContent = '(' + (Object.keys(grSel).length + 1) + ')'; }
+async function setGroupAdmin(id, on){
+  const gid = grEdit; if (!gid) return;
+  try {
+    await fs.doc('chats/' + gid).update({ admins: on ? firebase.firestore.FieldValue.arrayUnion(id) : firebase.firestore.FieldValue.arrayRemove(id) });
+    toast(on ? nameOf(id) + ' صار مدير للمجموعة' : 'تم إلغاء إدارة ' + nameOf(id));
+    setTimeout(renderGroupMembers, 300);
+  } catch (e) { console.error(e); toast('ما قدرنا نغيّر المدير: ' + permErr(e)); }
+}
+async function transferGroup(id){
+  const gid = grEdit, g = groupDoc(gid); if (!g) return;
+  const ok = await askText('نقل ملكية المجموعة لـ ' + nameOf(id) + '؟ بتصير مدير بعدها. اكتب "نقل" للتأكيد'); if (ok !== 'نقل') return;
+  const admins = [...new Set([...(g.admins || []).filter(a => a !== id), uid])];
+  try { await fs.doc('chats/' + gid).update({ owner: id, admins }); toast('صار ' + nameOf(id) + ' مالك المجموعة'); back(); }
+  catch (e) { console.error(e); toast('ما قدرنا ننقل الملكية: ' + permErr(e)); }
+}
+// إرسال دعوة المجموعة في الدردشة الخاصة مع كل شخص
+async function sendGroupInvites(gid, gname, ids){
+  let sent = 0;
+  for (const id of ids) {
+    if (isBlocked(id) || !contacts[id]) continue;
+    const cid = chatIdWith(id), ts = Date.now(), expiresAt = firebase.firestore.Timestamp.fromMillis(ts + MESSAGE_LIFETIME);
+    try {
+      await fs.doc('chats/' + cid).set({ members: [uid, id].sort() }, { merge: true });
+      const b = fs.batch(), msg = fs.collection('chats/' + cid + '/messages').doc();
+      b.set(msg, { from: uid, ts, kind: 'group-invite', gid, gname: String(gname || '').slice(0, 40), expiresAt });
+      b.update(fs.doc('chats/' + cid), { lastMsg: '👥 دعوة لمجموعة «' + String(gname || '').slice(0, 40) + '»', lastTs: ts, lastFrom: uid, lastKind: 'group-invite', ['read.' + uid]: ts });
+      await b.commit(); notifyPush(cid); sent++;
+    } catch (e) { console.error('invite', id, e); }
+  }
+  return sent;
+}
+async function answerGroupInvite(gid, accept, button){
+  if (button) button.disabled = true;
+  const ref = fs.doc('chats/' + gid), del = firebase.firestore.FieldValue.delete();
+  try {
+    if (accept) await ref.update({ members: firebase.firestore.FieldValue.arrayUnion(uid), ['invites.' + uid]: del });
+    else await ref.update({ ['invites.' + uid]: del });
+    toast(accept ? 'انضممت للمجموعة ✅' : 'تم رفض الدعوة');
+    if (accept) { show('s-home', false); openGroup(gid); }
+  } catch (e) {
+    console.error(e); if (button) button.disabled = false;
+    toast(e?.code === 'permission-denied' ? 'الدعوة انتهت أو أُلغيت' : 'ما قدرنا نرد على الدعوة، تأكد من الاتصال');
+  }
+}
 $('grSave').addEventListener('click', async () => {
   if (grBusy) return;
   const name = $('grName').value.replace(/\s+/g, ' ').trim(), sel = Object.keys(grSel);
   if (!name) { toast('اكتب اسم المجموعة'); return; }
-  if (!sel.length) { toast('اختر صديق واحد على الأقل'); return; }
+  if (!grEdit && !sel.length) { toast('اختر صديق واحد على الأقل'); return; }
   if (sel.length > 49) { toast('الحد 50 عضو'); return; }
   grBusy = true; $('grSave').disabled = true;
   try {
     const now = Date.now();
     if (!grEdit) {
-      const ref = fs.collection('chats').doc();
-      await ref.set({ isGroup: true, name, owner: uid, members: [uid, ...sel], createdAt: now, lastTs: now, lastMsg: 'أُنشئت المجموعة', lastFrom: uid, lastKind: 'system', read: { [uid]: now } });
-      toast('تم إنشاء المجموعة ✅'); show('s-home', false); openGroup(ref.id);
+      const ref = fs.collection('chats').doc(), invites = Object.fromEntries(sel.map(id => [id, now]));
+      const base = { isGroup: true, name, owner: uid, admins: [], createdAt: now, lastTs: now, lastMsg: 'أُنشئت المجموعة', lastFrom: uid, lastKind: 'system', read: { [uid]: now } };
+      try { await ref.set({ ...base, members: [uid], invites }); }
+      catch (e) {
+        // قواعد Firebase القديمة تتطلب عضوين على الأقل: نضيف المختارين مباشرة
+        if (e?.code !== 'permission-denied') throw e;
+        await ref.set({ ...base, members: [uid, ...sel] }); toast('تم إنشاء المجموعة ✅'); show('s-home', false); openGroup(ref.id); return;
+      }
+      const n = await sendGroupInvites(ref.id, name, sel);
+      toast('تم إنشاء المجموعة وإرسال ' + n + ' دعوة ✅'); show('s-home', false); openGroup(ref.id);
     } else {
-      await fs.doc('chats/' + grEdit).update({ name, members: [uid, ...sel] });
-      toast('تم حفظ المجموعة'); back();
+      const g = groupDoc(grEdit) || {}, members = g.members || [], oldInv = g.invites || {}, owner = g.owner === uid;
+      const keep = members.filter(m => m === uid || m === g.owner || grSel[m] || (!owner && (g.admins || []).includes(m)));
+      const fresh = sel.filter(id => !members.includes(id) && !oldInv[id]);
+      const invites = {}; Object.keys(oldInv).forEach(id => { if (grSel[id] && !members.includes(id)) invites[id] = oldInv[id]; }); fresh.forEach(id => invites[id] = now);
+      if (keep.length + Object.keys(invites).length > 50) { toast('الحد 50 عضو'); return; }
+      await fs.doc('chats/' + grEdit).update({ name, members: keep, invites, admins: (g.admins || []).filter(a => keep.includes(a)) });
+      const n = fresh.length ? await sendGroupInvites(grEdit, name, fresh) : 0;
+      toast(n ? 'تم الحفظ وإرسال ' + n + ' دعوة' : 'تم حفظ المجموعة'); back();
     }
-  } catch (e) { console.error(e); toast('ما قدرنا نحفظ المجموعة، تأكد من الاتصال'); }
-  grBusy = false; $('grSave').disabled = false;
+  } catch (e) { console.error(e); toast('ما قدرنا نحفظ المجموعة: ' + permErr(e)); }
+  finally { grBusy = false; $('grSave').disabled = false; }
 });
 $('grLeave').addEventListener('click', async () => {
+  const g = groupDoc(grEdit);
+  if (g?.owner === uid) { toast('انقل الملكية لعضو ثاني قبل المغادرة (من زر «نقل الملكية»)'); return; }
   const ok = await askText('اكتب "مغادرة" لتأكيد الخروج من المجموعة'); if (ok !== 'مغادرة') return;
-  try { await fs.doc('chats/' + grEdit).update({ members: firebase.firestore.FieldValue.arrayRemove(uid) }); lastChat = null; toast('طلعت من المجموعة'); show('s-home'); }
+  try {
+    const upd = { members: firebase.firestore.FieldValue.arrayRemove(uid) };
+    if ((g?.admins || []).includes(uid)) upd.admins = firebase.firestore.FieldValue.arrayRemove(uid);
+    await fs.doc('chats/' + grEdit).update(upd); lastChat = null; toast('طلعت من المجموعة'); show('s-home');
+  }
   catch (e) { console.error(e); toast('ما قدرنا نطلعك من المجموعة'); }
 });
 $('grDelete').addEventListener('click', async () => {
