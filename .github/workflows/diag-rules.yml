@@ -6,10 +6,10 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Probe VPS services
+      - name: Probe stories API with a temp account
         run: |
-          for u in https://51-254-218-100.sslip.io/api/stories https://51-254-218-100.sslip.io/ https://51-254-218-100.sslip.io/api/notify; do
-            r=$(curl -s -m 20 -o b.txt -w '%{http_code} %{time_total}s' "$u" 2>&1); echo "::notice::$u -> $r $(head -c 120 b.txt | tr '\n' ' ')"
-          done
-          r=$(curl -s -m 20 -o /dev/null -w '%{http_code}' -X OPTIONS -H 'Origin: capacitor://localhost' -H 'Access-Control-Request-Method: GET' https://51-254-218-100.sslip.io/api/stories); echo "::notice::CORS preflight -> $r"
-          nc -z -w 8 51.254.218.100 443 && echo "::notice::port 443 open" || echo "::notice::port 443 closed"
+          KEY=AIzaSyDn_609hmjmbSD8hFcWc8-PcEDhI61D4z8
+          R=$(curl -s -H 'Content-Type: application/json' -d '{"returnSecureToken":true}' "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$KEY"); T=$(echo "$R"|jq -r .idToken)
+          r=$(curl -s -m 40 -o b.txt -w '%{http_code} %{time_total}s' -H "Authorization: Bearer $T" -H 'Origin: capacitor://localhost' https://51-254-218-100.sslip.io/api/stories); echo "::notice::GET stories -> $r $(head -c 300 b.txt | tr '\n' ' ')"
+          r=$(curl -s -m 40 -o b.txt -w '%{http_code}' -H "Authorization: Bearer $T" "https://firestore.googleapis.com/v1/projects/bbm-old-1e477/databases/(default)/documents/users/x"); echo "::notice::Firestore read -> $r $(head -c 200 b.txt | tr '\n' ' ')"
+          curl -s -o /dev/null -H 'Content-Type: application/json' -d "{\"idToken\":\"$T\"}" "https://identitytoolkit.googleapis.com/v1/accounts:delete?key=$KEY"
