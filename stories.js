@@ -68,7 +68,8 @@ window.BPBStories = (() => {
   async function refresh(force=false){
     if(!auth?.currentUser||!me)return;
     if(account!==uid){account=uid;feed=[];lastFetch=0;close();}
-    paint();if(loading||(!force&&Date.now()-lastFetch<30000))return;loading=true;lastFetch=Date.now();const current=uid;
+    /* كل تحديث للستوري يكلّف السيرفر قراءات من Firebase، فنحدّث كل دقيقتين بالكثير */
+    paint();if(loading||(!force&&Date.now()-lastFetch<120000))return;loading=true;lastFetch=Date.now();const current=uid;
     try{const data=await api();if(uid!==current)return;offset=data.serverNow-Date.now();feed=data.stories;paint();}
     catch(e){if(!feed.length){const retry=button('الستوري غير متاح · إعادة المحاولة',()=>refresh(true));retry.className='story-retry';strip.append(retry);}}
     finally{loading=false;}
@@ -259,7 +260,7 @@ window.BPBStories = (() => {
   });
   document.addEventListener('visibilitychange',()=>{if(document.hidden)close();else refresh(true);});
   auth?.onAuthStateChanged(()=>{feed=[];lastFetch=0;account='';close();strip.replaceChildren();});
-  setInterval(()=>{if(!document.hidden&&!$('s-home').hidden){paint();refresh();}},15000);
+  setInterval(()=>{if(!document.hidden&&!$('s-home').hidden){paint();refresh();}},60000);
   function renderReply(m,target){
     const quote=button('رد على ستوري',async()=>{if(!alive(m.story)){quote.textContent='انتهى الستوري';return;}queue=[m.story];position=0;showModal();view();});
     quote.className='story-quote';if(!alive(m.story))quote.textContent='انتهى الستوري';target.append(quote);

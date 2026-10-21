@@ -72,7 +72,8 @@ const Haptics = IS_NATIVE ? window.Capacitor?.Plugins?.Haptics : null;
 let blocked = {};                 // المستخدمين اللي حظرتهم
 const gone = {};                  // حسابات انحذفت
 const isBlocked = id => !!blocked[id];
-const ONLINE_MS = 6 * 60 * 1000;
+// «متصل» تقريبي: نحدّث آخر ظهور قليل عشان نوفّر استهلاك Firebase
+const ONLINE_MS = 25 * 60 * 1000;
 const GROUP_MS = 5 * 60 * 1000;   // رسائل نفس الشخص خلال 5 دقائق تنجمع في بطاقة وحدة
 
 let auth, fs, uid = null, me = null, tab = null;
@@ -757,8 +758,10 @@ async function setupPush(){
   } catch (e) { console.error('push', e); }
 }
 function heartbeat(){
-  const beat = () => { if (document.visibilityState === 'visible') fs.doc('users/' + uid).update({ lastSeen: Date.now() }).catch(() => {}); };
-  beat(); setInterval(beat, 4 * 60 * 1000);
+  // آخر ظهور: عند فتح التطبيق (إذا مر 10 دقائق) وكل 20 دقيقة وهو مفتوح؛ كل تحديث يكلّف قراءة عند كل صديق
+  let lastBeat = 0;
+  const beat = (force) => { if (document.visibilityState !== 'visible' || (!force && Date.now() - lastBeat < 10 * 60 * 1000)) return; lastBeat = Date.now(); fs.doc('users/' + uid).update({ lastSeen: lastBeat }).catch(() => {}); };
+  beat(true); setInterval(() => beat(true), 20 * 60 * 1000);
   document.addEventListener('visibilitychange', () => { beat(); markRead(); updateTitle(); });
   setInterval(() => { if (document.hidden) return; renderHomeSoon(); if (!$('s-profile').hidden) renderProfile(); if (chatPeer || chatGroup) renderChatHead(); }, 30000);
 }
@@ -1542,11 +1545,11 @@ function markRead(){
 function renderTyping(){
   const typing = curChat?.typing || {};
   if (chatGroup) {
-    const who = ((curChat || {}).members || []).filter(m => m !== uid && Date.now() - (typing[m] || 0) < 5000);
+    const who = ((curChat || {}).members || []).filter(m => m !== uid && Date.now() - (typing[m] || 0) < 8000);
     $('typing').textContent = who.length ? who.slice(0, 2).map(nameOf).join('، ') + (who.length > 1 ? ' يكتبون…' : ' يكتب…') : '';
     return;
   }
-  const t = typing[chatPeer] || 0, txt = chatPeer && Date.now() - t < 5000 ? nameOf(chatPeer) + ' يكتب…' : '';
+  const t = typing[chatPeer] || 0, txt = chatPeer && Date.now() - t < 8000 ? nameOf(chatPeer) + ' يكتب…' : '';
   if ($('typing').textContent !== txt) $('typing').textContent = txt;
 }
 setInterval(() => { if (!document.hidden && chatId) renderTyping(); }, 1500);
@@ -1688,11 +1691,11 @@ async function sendPhoto(file){
   try {
     objectUrl=URL.createObjectURL(file);const image=new Image();image.src=objectUrl;await image.decode();
     let payload='';
-    for(const [max,q] of [[1280,.72],[1080,.6],[900,.5],[720,.45]]){
+    for(const [max,q] of [[1024,.62],[900,.52],[720,.45],[600,.4]]){
       const scale=Math.min(1,max/Math.max(image.width,image.height)),canvas=document.createElement('canvas');
       canvas.width=Math.max(1,Math.round(image.width*scale));canvas.height=Math.max(1,Math.round(image.height*scale));
       const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(image,0,0,canvas.width,canvas.height);
-      payload=canvas.toDataURL('image/jpeg',q); if(payload.length<=700000) break;
+      payload=canvas.toDataURL('image/jpeg',q); if(payload.length<=320000) break;
     }
     if(payload.length>700000) throw new Error('Photo too large');
     if(id!==chatId || $('composer').hidden) return;
@@ -1818,7 +1821,7 @@ $('faceBtn').addEventListener('click', () => toggleFaces());
 $('msgInput').addEventListener('input', () => {
   const parts=editorParts();if(partsText(parts).length>2000||parts.length>128)restoreEditor(lastEditorParts);else {lastEditorParts=parts;if(!parts.length){$('msgInput').replaceChildren();editorRange=null;}}
   updateComposer();
-  if (!chatId || Date.now() - typingSent < 3000) return;
+  if (!chatId || Date.now() - typingSent < 6000 || !partsText(editorParts()).trim()) return;
   typingSent = Date.now();
   fs.doc('chats/' + chatId).update({ ['typing.' + uid]: typingSent }).catch(() => {});
 });
