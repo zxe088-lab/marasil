@@ -3,18 +3,13 @@ on:
   push:
     branches: [diag-rules]
 jobs:
-  rules:
+  probe:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20 }
-      - uses: actions/setup-java@v4
-        with: { distribution: temurin, java-version: 21 }
-      - name: Test group rules in emulator
-        working-directory: rules-test
+      - name: Probe VPS services
         run: |
-          npm install --no-audit --no-fund >/dev/null 2>&1
-          npx firebase emulators:exec --only firestore --project demo-bpb "node test.mjs" > out.txt 2>&1 || true
-          grep -E "PASS|FAIL|RESULT|rror" out.txt | head -60
-          grep -E "FAIL|RESULT|FirebaseError" out.txt | head -9 | while read l; do echo "::notice::$l"; done
+          for u in https://51-254-218-100.sslip.io/api/stories https://51-254-218-100.sslip.io/ https://51-254-218-100.sslip.io/api/notify; do
+            r=$(curl -s -m 20 -o b.txt -w '%{http_code} %{time_total}s' "$u" 2>&1); echo "::notice::$u -> $r $(head -c 120 b.txt | tr '\n' ' ')"
+          done
+          r=$(curl -s -m 20 -o /dev/null -w '%{http_code}' -X OPTIONS -H 'Origin: capacitor://localhost' -H 'Access-Control-Request-Method: GET' https://51-254-218-100.sslip.io/api/stories); echo "::notice::CORS preflight -> $r"
+          nc -z -w 8 51.254.218.100 443 && echo "::notice::port 443 open" || echo "::notice::port 443 closed"
