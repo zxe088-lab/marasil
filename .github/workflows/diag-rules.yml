@@ -6,10 +6,17 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Probe stories API with a temp account
+      - name: Probe live group rules
         run: |
-          KEY=AIzaSyDn_609hmjmbSD8hFcWc8-PcEDhI61D4z8
-          R=$(curl -s -H 'Content-Type: application/json' -d '{"returnSecureToken":true}' "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$KEY"); T=$(echo "$R"|jq -r .idToken)
-          r=$(curl -s -m 40 -o b.txt -w '%{http_code} %{time_total}s' -H "Authorization: Bearer $T" -H 'Origin: capacitor://localhost' https://51-254-218-100.sslip.io/api/stories); echo "::notice::GET stories -> $r $(head -c 300 b.txt | tr '\n' ' ')"
-          r=$(curl -s -m 40 -o b.txt -w '%{http_code}' -H "Authorization: Bearer $T" "https://firestore.googleapis.com/v1/projects/bbm-old-1e477/databases/(default)/documents/users/x"); echo "::notice::Firestore read -> $r $(head -c 200 b.txt | tr '\n' ' ')"
-          curl -s -o /dev/null -H 'Content-Type: application/json' -d "{\"idToken\":\"$T\"}" "https://identitytoolkit.googleapis.com/v1/accounts:delete?key=$KEY"
+          KEY=AIzaSyDn_609hmjmbSD8hFcWc8-PcEDhI61D4z8; P=bbm-old-1e477
+          B="https://firestore.googleapis.com/v1/projects/$P/databases/(default)/documents"
+          su(){ curl -s -H 'Content-Type: application/json' -d '{"returnSecureToken":true}' "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$KEY"; }
+          RA=$(su); TA=$(echo "$RA"|jq -r .idToken); A=$(echo "$RA"|jq -r .localId)
+          RB=$(su); TB=$(echo "$RB"|jq -r .idToken); Bu=$(echo "$RB"|jq -r .localId)
+          G=probe$(date +%s); NOW=$(date +%s000)
+          arr(){ local o=""; for x in "$@"; do o="$o{\"stringValue\":\"$x\"},"; done; echo "{\"arrayValue\":{\"values\":[${o%,}]}}"; }
+          req(){ c=$(curl -s -o r.json -w '%{http_code}' -X "$2" -H "Authorization: Bearer $1" -H 'Content-Type: application/json' "$B/$3" ${4:+-d "$4"}); echo "::notice::$5 -> $c $(jq -c '.error.message // empty' r.json 2>/dev/null | cut -c1-100)"; }
+          req "$TA" PATCH "chats/$G?currentDocument.exists=false" "{\"fields\":{\"isGroup\":{\"booleanValue\":true},\"name\":{\"stringValue\":\"probe\"},\"owner\":{\"stringValue\":\"$A\"},\"admins\":{\"arrayValue\":{}},\"members\":$(arr $A),\"invites\":{\"mapValue\":{\"fields\":{\"$Bu\":{\"integerValue\":\"$NOW\"}}}},\"lastTs\":{\"integerValue\":\"$NOW\"}}}" "1 create group with invite only (new rules)"
+          req "$TB" PATCH "chats/$G?updateMask.fieldPaths=members&updateMask.fieldPaths=invites" "{\"fields\":{\"members\":$(arr $A $Bu),\"invites\":{\"mapValue\":{}}}}" "2 invitee accepts (new rules)"
+          req "$TA" DELETE "chats/$G" "" "3 cleanup"
+          for T in "$TA" "$TB"; do curl -s -o /dev/null -H 'Content-Type: application/json' -d "{\"idToken\":\"$T\"}" "https://identitytoolkit.googleapis.com/v1/accounts:delete?key=$KEY"; done
