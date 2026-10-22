@@ -33,5 +33,13 @@ await t('DM update', assertSucceeds(updateDoc(doc(db('C'), 'chats/A_C'), { lastM
 await t('DM outsider blocked', assertFails(updateDoc(doc(db('B'), 'chats/A_C'), { lastMsg: 'x' })));
 await t('group with 2 direct members still allowed', assertSucceeds(setDoc(doc(db('A'), 'chats/g2'), { isGroup: true, name: 'G', owner: 'A', admins: [], members: ['A', 'B'], lastTs: now })));
 await t('cannot create group owned by someone else', assertFails(setDoc(doc(db('A'), 'chats/g3'), { isGroup: true, name: 'G', owner: 'B', admins: [], members: ['A', 'B'] })));
+
+import { addDoc, collection, Timestamp } from 'firebase/firestore';
+await t('DM message create', assertSucceeds(setDoc(doc(db('A'), 'chats/A_C/messages/m1'), { from: 'A', ts: now, kind: 'text', text: 'hi' })));
+await t('DM message as someone else denied', assertFails(setDoc(doc(db('A'), 'chats/A_C/messages/m2'), { from: 'C', ts: now, kind: 'text', text: 'x' })));
+await t('outsider cannot post in DM', assertFails(setDoc(doc(db('B'), 'chats/A_C/messages/m3'), { from: 'B', ts: now, kind: 'text', text: 'x' })));
+await t('group member posts message', assertSucceeds(setDoc(doc(db('B'), 'chats/g2/messages/m1'), { from: 'B', ts: now, kind: 'photo', image: 'data:image/jpeg;base64,AAAA' })));
+await t('non-member cannot post in group', assertFails(setDoc(doc(db('C'), 'chats/g2/messages/m2'), { from: 'C', ts: now, kind: 'text', text: 'x' })));
+await t('users self update with notif/menu', assertSucceeds(updateDoc(doc(db('A'), 'users/A'), { notif: { friends: { tone: 'bbm' } }, lastSeen: now })));
 console.log(`RESULT pass=${pass} fail=${fail}`);
 await env.cleanup(); process.exit(fail ? 1 : 0);

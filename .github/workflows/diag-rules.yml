@@ -3,20 +3,17 @@ on:
   push:
     branches: [diag-rules]
 jobs:
-  probe:
+  rules:
     runs-on: ubuntu-latest
     steps:
-      - name: Probe live group rules
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - name: Test full rules in emulator
+        working-directory: rules-test
         run: |
-          KEY=AIzaSyDn_609hmjmbSD8hFcWc8-PcEDhI61D4z8; P=bbm-old-1e477
-          B="https://firestore.googleapis.com/v1/projects/$P/databases/(default)/documents"
-          su(){ curl -s -H 'Content-Type: application/json' -d '{"returnSecureToken":true}' "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$KEY"; }
-          RA=$(su); TA=$(echo "$RA"|jq -r .idToken); A=$(echo "$RA"|jq -r .localId)
-          RB=$(su); TB=$(echo "$RB"|jq -r .idToken); Bu=$(echo "$RB"|jq -r .localId)
-          G=probe$(date +%s); NOW=$(date +%s000)
-          arr(){ local o=""; for x in "$@"; do o="$o{\"stringValue\":\"$x\"},"; done; echo "{\"arrayValue\":{\"values\":[${o%,}]}}"; }
-          req(){ c=$(curl -s -o r.json -w '%{http_code}' -X "$2" -H "Authorization: Bearer $1" -H 'Content-Type: application/json' "$B/$3" ${4:+-d "$4"}); echo "::notice::$5 -> $c $(jq -c '.error.message // empty' r.json 2>/dev/null | cut -c1-100)"; }
-          req "$TA" PATCH "chats/$G?currentDocument.exists=false" "{\"fields\":{\"isGroup\":{\"booleanValue\":true},\"name\":{\"stringValue\":\"probe\"},\"owner\":{\"stringValue\":\"$A\"},\"admins\":{\"arrayValue\":{}},\"members\":$(arr $A),\"invites\":{\"mapValue\":{\"fields\":{\"$Bu\":{\"integerValue\":\"$NOW\"}}}},\"lastTs\":{\"integerValue\":\"$NOW\"}}}" "1 create group with invite only (new rules)"
-          req "$TB" PATCH "chats/$G?updateMask.fieldPaths=members&updateMask.fieldPaths=invites" "{\"fields\":{\"members\":$(arr $A $Bu),\"invites\":{\"mapValue\":{}}}}" "2 invitee accepts (new rules)"
-          req "$TA" DELETE "chats/$G" "" "3 cleanup"
-          for T in "$TA" "$TB"; do curl -s -o /dev/null -H 'Content-Type: application/json' -d "{\"idToken\":\"$T\"}" "https://identitytoolkit.googleapis.com/v1/accounts:delete?key=$KEY"; done
+          npm install --no-audit --no-fund >/dev/null 2>&1
+          npx firebase emulators:exec --only firestore --project demo-bpb "node test.mjs" > out.txt 2>&1 || true
+          grep -E "FAIL|RESULT|FirebaseError|rror compiling" out.txt | head -9 | while read l; do echo "::notice::$l"; done
