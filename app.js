@@ -2010,7 +2010,7 @@ let grEdit = null, grSel = {}, grBusy = false;
 // إدارة المجموعة: المالك يعيّن مديرين وينقل الملكية، والإضافة ترسل دعوة يقبلها العضو قبل ما ينضم
 const groupDoc = gid => gid ? (chatGroup === gid && curChat ? curChat : chats[gid]) : null;
 // تعيين المدير ونقل الملكية والدعوات تحتاج قواعد Firebase الجديدة (firestore-groups-rules.txt)؛ نخليها مقفلة لين تتحدث القواعد
-const GROUP_ADMIN_FEATURES = false;
+const GROUP_ADMIN_FEATURES = true;
 const isGroupAdmin = (g, id = uid) => !!g && (g.owner === id || (g.admins || []).includes(id));
 const groupRole = (g, id) => !g ? (id === uid ? ' (المالك)' : '') : g.owner === id ? ' (المالك)' : (g.admins || []).includes(id) ? ' (مدير)' : '';
 const permErr = e => e?.code === 'permission-denied' ? 'العملية مرفوضة من السيرفر (تحتاج تحديث قواعد Firebase)' : 'تأكد من الاتصال وحاول مرة ثانية';
