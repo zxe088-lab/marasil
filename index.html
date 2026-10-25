@@ -13,7 +13,7 @@
 <link rel="manifest" href="manifest.json">
 <title>BPB OLD</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=41">
+<link rel="stylesheet" href="style.css?v=42">
 </head>
 <body>
 <!-- أيقونات -->
@@ -287,6 +287,7 @@
       <button type="button" class="btn sm" id="chUnblock">إلغاء الحظر</button>
     </div>
     <div class="face-panel" id="facePanel" hidden></div>
+    <div id="replyBar" class="reply-bar" hidden><div class="rb-body"><b id="replyName"></b><span id="replyText"></span></div><button type="button" id="replyCancel" aria-label="إلغاء الرد">×</button></div>
     <form class="composer" id="composer">
       <button type="button" id="pingBtn" class="composer-ping" aria-label="وكز PING!!">PING!!</button>
       <div class="composer-write">
@@ -320,7 +321,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="app.js?v=49"></script>
+<script src="app.js?v=50"></script>
 <script src="story-editor.js?v=2"></script>
 <script src="stories.js?v=8"></script>
 </body>
