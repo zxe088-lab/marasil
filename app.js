@@ -1454,6 +1454,10 @@ $('chInfo').addEventListener('click', () => chatGroup ? openGroupEditor(chatGrou
 
 // نجمع طلبات الرسم في إطار واحد، ونعيد رسم الرسائل فقط إذا تغيّر شي يأثر عليها
 let msgsRaf = 0, msgsFrom = false;
+let msgsPaintedFor = null, msgsAtBottom = true;
+// لما يفتح الكيبورد وتصغر قائمة الرسائل: إذا كنت تحت نخليك على آخر رسالة
+$('msgList').addEventListener('scroll', () => { const l = $('msgList'); msgsAtBottom = l.scrollHeight - l.scrollTop - l.clientHeight < 80; }, { passive: true });
+if (window.ResizeObserver) new ResizeObserver(() => { const l = $('msgList'); if (msgsAtBottom) l.scrollTop = l.scrollHeight; }).observe($('msgList'));
 function renderMsgsSoon(fromMsgs){
   msgsFrom = msgsFrom || !!fromMsgs;
   if (msgsRaf) return;
@@ -1462,7 +1466,10 @@ function renderMsgsSoon(fromMsgs){
 const msgsKey = c => JSON.stringify([(c || {}).read || {}, (c || {}).members || [], (c || {}).name || '']);
 function renderMsgs(fromMsgs){
   if (!chatPeer && !chatGroup) return;
-  const list = $('msgList'), atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 80;
+  const list = $('msgList'), atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 80, prevTop = list.scrollTop;
+  // ننزل لآخر الرسائل: أول فتح للدردشة، أو كنت أصلاً تحت، أو آخر رسالة منك. غير كذا نخلي مكانك مثل ما هو
+  const firstPaint = msgsPaintedFor !== chatId; msgsPaintedFor = chatId;
+  const stick = firstPaint || atBottom || (fromMsgs && msgs.length && msgs[msgs.length - 1].from === uid);
   list.replaceChildren();
   if (!msgs.length) { list.append(el('div', 'empty', chatGroup ? 'ابدأ الدردشة في «' + ((curChat || {}).name || 'المجموعة') + '».' : 'ابدأ الدردشة مع ' + nameOf(chatPeer) + '.')); return; }
   const readers = chatGroup ? ((curChat || {}).members || []).filter(m => m !== uid) : [chatPeer];
@@ -1511,7 +1518,9 @@ function renderMsgs(fromMsgs){
       const targetChat = chatId; button.onclick = () => openOncePhoto(targetChat, m.id, button); txt.append(button);
     }
     else if (m.kind === 'photo' && typeof m.image === 'string' && /^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/.test(m.image)) {
-      const im = el('img', 'chat-photo'), src = blobUrlOf(m.image); im.alt = 'صورة'; im.loading = 'lazy'; im.decoding = 'async'; im.src = src;
+      const im = el('img', 'chat-photo'), src = blobUrlOf(m.image); im.alt = 'صورة'; im.decoding = 'async'; im.src = src;
+      // الصورة تكبر لما تتحمّل: إذا كنت تحت نخليك تحت
+      im.addEventListener('load', () => { const l = $('msgList'); if (l.scrollHeight - l.scrollTop - l.clientHeight < 400) l.scrollTop = l.scrollHeight; });
       im.addEventListener('click', () => viewPhoto(src)); txt.classList.add('photo-message'); txt.append(im);
     }
     else if (m.kind === 'group-invite' && typeof m.gid === 'string') {
@@ -1529,7 +1538,7 @@ function renderMsgs(fromMsgs){
     line.append(mark, txt);
     card.firstChild.append(line);
   });
-  if (atBottom || fromMsgs) list.scrollTop = list.scrollHeight;
+  if (stick) list.scrollTop = list.scrollHeight; else list.scrollTop = prevTop;
   markRead();
 }
 
