@@ -771,6 +771,7 @@ function watchUser(id){
   userSubs[id] = fs.doc('users/' + id).onSnapshot(s => {
     const prev = users[id];
     if (s.exists) { users[id] = s.data(); delete gone[id]; } else { delete users[id]; gone[id] = true; }
+    usersRev++;
     if (prev && users[id] && prev.updatedAt !== users[id].updatedAt && contacts[id]) play('contact');
     renderHomeSoon();
     if (profileId === id && !$('s-profile').hidden) renderProfile();
@@ -1426,7 +1427,7 @@ async function openChat(peer){
       renderMsgsSoon(true);
     });
 }
-function closeChat(){ chatGroup = null; cancelVoice(); closeOncePhoto(); clearDraftSticker(); toggleFaces(false); unsubMsgs?.(); unsubChat?.(); unsubMsgs = unsubChat = null; chatId = chatPeer = null; }
+function closeChat(){ clearReply(); msgsSig = ''; chatGroup = null; cancelVoice(); closeOncePhoto(); clearDraftSticker(); toggleFaces(false); unsubMsgs?.(); unsubChat?.(); unsubMsgs = unsubChat = null; chatId = chatPeer = null; }
 function renderChatHead(){
   if (chatGroup) {
     const g = curChat || chats[chatGroup] || {}, others = (g.members || []).filter(m => m !== uid);
@@ -1454,7 +1455,35 @@ $('chInfo').addEventListener('click', () => chatGroup ? openGroupEditor(chatGrou
 
 // نجمع طلبات الرسم في إطار واحد، ونعيد رسم الرسائل فقط إذا تغيّر شي يأثر عليها
 let msgsRaf = 0, msgsFrom = false;
-let msgsPaintedFor = null, msgsAtBottom = true;
+let msgsPaintedFor = null, msgsAtBottom = true, msgsSig = '', usersRev = 0;
+// الرد على رسالة معيّنة (خاص أو قروب): ضغطة مطوّلة على الرسالة ثم «رد»
+let replyTo = null;
+function msgSnippet(m){
+  const k = m.kind;
+  const t = k === 'photo' ? '📷 صورة' : k === 'once-photo' ? '📷 صورة لمرة واحدة' : k === 'voice' ? '🎤 رسالة صوتية' : k === 'sticker' ? 'فيس' : k === 'ping' ? 'PING!!!' : k === 'group-invite' ? '👥 دعوة لمجموعة' : k === 'story-reply' ? 'رد على ستوري' : (m.text || '');
+  return String(t).replace(/\s+/g, ' ').trim().slice(0, 90);
+}
+function setReply(m){
+  if (!chatId || $('composer').hidden) return;
+  replyTo = { chat: chatId, id: m.id, from: m.from, text: msgSnippet(m) };
+  $('replyName').textContent = 'رد على ' + (m.from === uid ? 'نفسك' : nameOf(m.from));
+  $('replyText').textContent = replyTo.text; $('replyBar').hidden = false;
+  $('msgInput').focus({ preventScroll: true }); scheduleViewport?.();
+}
+function clearReply(){ replyTo = null; const b = $('replyBar'); if (b) b.hidden = true; scheduleViewport?.(); }
+$('replyCancel').addEventListener('click', clearReply);
+async function messageMenu(m){
+  const hasText = typeof m.text === 'string' && m.text && m.kind !== 'ping';
+  const opts = [['reply', '↩︎ رد']]; if (hasText) opts.push(['copy', 'نسخ النص']);
+  const pick = await chooseSheet(msgSnippet(m) || 'رسالة', opts);
+  if (pick === 'reply') setReply(m);
+  else if (pick === 'copy') { try { await navigator.clipboard.writeText(m.text); toast('تم النسخ'); } catch { toast('ما قدرنا ننسخ'); } }
+}
+function jumpToMsg(id){
+  const t = $('msgList').querySelector('[data-mid="' + CSS.escape(id) + '"]');
+  if (!t) { toast('الرسالة الأصلية ما عادت موجودة'); return; }
+  t.scrollIntoView({ block: 'center', behavior: 'smooth' }); t.classList.remove('flash'); void t.offsetWidth; t.classList.add('flash');
+}
 // لما يفتح الكيبورد وتصغر قائمة الرسائل: إذا كنت تحت نخليك على آخر رسالة
 $('msgList').addEventListener('scroll', () => { const l = $('msgList'); msgsAtBottom = l.scrollHeight - l.scrollTop - l.clientHeight < 80; }, { passive: true });
 if (window.ResizeObserver) new ResizeObserver(() => { const l = $('msgList'); if (msgsAtBottom) l.scrollTop = l.scrollHeight; }).observe($('msgList'));
@@ -1468,7 +1497,11 @@ function renderMsgs(fromMsgs){
   if (!chatPeer && !chatGroup) return;
   const list = $('msgList'), atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 80, prevTop = list.scrollTop;
   // ننزل لآخر الرسائل: أول فتح للدردشة، أو كنت أصلاً تحت، أو آخر رسالة منك. غير كذا نخلي مكانك مثل ما هو
-  const firstPaint = msgsPaintedFor !== chatId; msgsPaintedFor = chatId;
+  const firstPaint = msgsPaintedFor !== chatId;
+  // تسريع: إذا ما تغيّر شي في الرسائل ما نعيد رسم القائمة
+  const sig = chatId + '|' + Math.floor(Date.now() / 60000) + '|' + usersRev + '|' + JSON.stringify(curChat?.read || {}) + '|' + msgs.map(m => m.id + (m.pending ? 'p' : '') + (m.opened ? 'o' : '')).join(',');
+  if (!firstPaint && sig === msgsSig) return; msgsSig = sig;
+  msgsPaintedFor = chatId;
   const stick = firstPaint || atBottom || (fromMsgs && msgs.length && msgs[msgs.length - 1].from === uid);
   list.replaceChildren();
   if (!msgs.length) { list.append(el('div', 'empty', chatGroup ? 'ابدأ الدردشة في «' + ((curChat || {}).name || 'المجموعة') + '».' : 'ابدأ الدردشة مع ' + nameOf(chatPeer) + '.')); return; }
@@ -1488,13 +1521,24 @@ function renderMsgs(fromMsgs){
       list.append(card); cardFrom = m.from;
     }
     cardTs = m.ts;
-    const line = el('div', 'line' + (m.broadcast ? ' bc' : ''));
+    const line = el('div', 'line' + (m.broadcast ? ' bc' : '')); line.dataset.mid = m.id;
+    let pressT = 0, pressXY = null;
+    line.addEventListener('pointerdown', e => { pressXY = [e.clientX, e.clientY]; clearTimeout(pressT); pressT = setTimeout(() => { pressT = 0; navigator.vibrate?.(15); try { Haptics?.impact?.({ style: 'LIGHT' }); } catch {} messageMenu(m); }, 450); });
+    line.addEventListener('pointermove', e => { if (pressXY && Math.hypot(e.clientX - pressXY[0], e.clientY - pressXY[1]) > 10) clearTimeout(pressT); });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => line.addEventListener(ev, () => clearTimeout(pressT)));
+    line.addEventListener('contextmenu', e => { e.preventDefault(); clearTimeout(pressT); messageMenu(m); });
     let mark;
     if (!mine) mark = el('span', 'mark dot');
     else if (m.pending) { mark = el('span', 'mark p'); mark.title = 'جاري الإرسال'; }
     else if (peerRead >= m.ts) { mark = el('span', 'mark r', 'R'); mark.title = 'تمت القراءة'; }
     else { mark = el('span', 'mark d', 'D'); mark.title = 'تم التسليم'; }
     const txt = el('span', 'txt');
+    if (m.replyTo && typeof m.replyTo.from === 'string' && typeof m.replyTo.text === 'string') {
+      const q = el('button', 'reply-quote'); q.type = 'button';
+      q.append(el('b', '', m.replyTo.from === uid ? 'أنت' : nameOf(m.replyTo.from)), el('span', '', m.replyTo.text.slice(0, 90)));
+      q.addEventListener('click', e => { e.stopPropagation(); if (typeof m.replyTo.id === 'string') jumpToMsg(m.replyTo.id); });
+      txt.append(q);
+    }
     if (m.broadcast) txt.append(el('span', 'bctag', '📢'));
     if(m.kind === 'story-reply' && window.BPBStories) { window.BPBStories.renderReply(m, txt); }
     else if(m.kind === 'richtext' && Array.isArray(m.parts)) {
@@ -1569,6 +1613,7 @@ async function sendMsg(data, expectedChat = chatId){
   const b = fs.batch();
   const message=fs.collection('chats/' + id + '/messages').doc(), expiresAt=firebase.firestore.Timestamp.fromMillis(ts + MESSAGE_LIFETIME);
   const messageData={from:uid,ts,kind:'text',...data,expiresAt};
+  if(replyTo && replyTo.chat===id && data.kind!=='ping' && data.kind!=='group-invite'){messageData.replyTo={id:replyTo.id,from:replyTo.from,text:replyTo.text};clearReply();}
   if(data.kind==='voice'){delete messageData.audio;b.set(fs.doc('chats/'+id+'/voiceClips/'+message.id),{from:uid,audio:data.audio,expiresAt});}
   b.set(message,messageData);
   b.update(fs.doc('chats/' + id), { lastMsg: data.kind === 'ping' ? 'PING!!!' : data.kind === 'voice' ? 'رسالة صوتية' : data.kind === 'sticker' ? 'فيس بلاك بيري' : data.kind === 'photo' ? '📷 صورة' : data.kind === 'group-invite' ? '👥 دعوة لمجموعة «' + (data.gname || '') + '»' : (data.text || '').slice(0, 80), lastTs: ts, lastFrom: uid, lastKind: data.kind || 'text', ['read.' + uid]: ts, ['typing.' + uid]: 0 });
